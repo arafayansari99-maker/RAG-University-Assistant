@@ -5,10 +5,11 @@ import { format } from "date-fns";
 import {
   Upload, Trash2, RefreshCw, File, AlertCircle, CheckCircle2,
   Clock, Search, X, FileText, Layers, FolderOpen, CloudUpload,
-  CheckCheck, LoaderCircle,
+  CheckCheck, LoaderCircle, ShieldAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -141,6 +142,8 @@ export default function DocumentsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const dragCounterRef = useRef(0);
 
   const { data: documents, isLoading } = useListDocuments({
@@ -304,12 +307,66 @@ export default function DocumentsPage() {
 
   // ─── Other handlers ──────────────────────────────────────────────────────────
 
+  // Clear selection when filtered list changes (e.g. search/filter)
+  const prevFilteredIds = useMemo(() => new Set(filtered.map((d) => d.id)), [filtered]);
+
+  const toggleSelect = (id: number) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  const toggleSelectAll = () => {
+    const visibleIds = filtered.map((d) => d.id);
+    const allSelected = visibleIds.every((id) => selectedIds.has(id));
+    if (allSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        visibleIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    } else {
+      setSelectedIds((prev) => new Set([...prev, ...visibleIds]));
+    }
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
   const handleDelete = (id: number) => {
     deleteDoc.mutate({ id }, {
       onSuccess: () => {
+        setSelectedIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
         toast({ title: "Document deleted" });
         queryClient.invalidateQueries({ queryKey: getListDocumentsQueryKey() });
       },
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds).filter((id) => prevFilteredIds.has(id));
+    if (ids.length === 0) return;
+    setIsBulkDeleting(true);
+    let deleted = 0;
+    let failed = 0;
+    for (const id of ids) {
+      try {
+        await new Promise<void>((resolve, reject) => {
+          deleteDoc.mutate({ id }, { onSuccess: () => resolve(), onError: () => reject() });
+        });
+        deleted++;
+      } catch {
+        failed++;
+      }
+    }
+    setIsBulkDeleting(false);
+    clearSelection();
+    queryClient.invalidateQueries({ queryKey: getListDocumentsQueryKey() });
+    toast({
+      title: failed === 0
+        ? `${deleted} document${deleted !== 1 ? "s" : ""} deleted`
+        : `${deleted} deleted, ${failed} failed`,
+      variant: failed > 0 ? "destructive" : "default",
     });
   };
 
@@ -340,6 +397,11 @@ export default function DocumentsPage() {
   const hasResults = filtered.length > 0;
   const isFiltering = search !== "" || statusFilter !== "all";
   const isUploading = queue.some((q) => q.status === "uploading" || q.status === "pending");
+
+  // Selection derived state
+  const visibleSelectedCount = filtered.filter((d) => selectedIds.has(d.id)).length;
+  const allVisibleSelected = filtered.length > 0 && filtered.every((d) => selectedIds.has(d.id));
+  const someVisibleSelected = visibleSelectedCount > 0 && !allVisibleSelected;
 
   return (
     <div
@@ -462,6 +524,40 @@ export default function DocumentsPage() {
         </p>
       )}
 
+      {/* Bulk-delete toolbar — slides in when rows are selected */}
+      {visibleSelectedCount > 0 && (
+        <div className="flex items-center justify-between gap-3 mb-3 px-4 py-2.5 bg-primary/5 border border-primary/20 rounded-xl">
+          <div className="flex items-center gap-2.5">
+            <Checkbox
+              checked={allVisibleSelected}
+              onCheckedChange={toggleSelectAll}
+              className="data-[state=indeterminate]:bg-primary data-[state=indeterminate]:text-primary-foreground"
+              aria-label="Select all visible"
+            />
+            <span className="text-sm font-medium text-foreground">
+              {visibleSelectedCount} of {filtered.length} selected
+            </span>
+            <button onClick={clearSelection} className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors">
+              Clear
+            </button>
+          </div>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={handleBulkDelete}
+            disabled={isBulkDeleting}
+            className="gap-2"
+          >
+            {isBulkDeleting ? (
+              <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="h-3.5 w-3.5" />
+            )}
+            Delete {visibleSelectedCount} document{visibleSelectedCount !== 1 ? "s" : ""}
+          </Button>
+        </div>
+      )}
+
       {/* Document table / empty states */}
       <div className={`bg-card border rounded-xl shadow-sm overflow-hidden transition-colors ${isDragging ? "border-primary/50 bg-primary/5" : "border-border"}`}>
         {isLoading ? (
@@ -506,59 +602,81 @@ export default function DocumentsPage() {
           <Table>
             <TableHeader className="bg-secondary/50">
               <TableRow>
-                <TableHead className="w-[42%]">Document</TableHead>
+                <TableHead className="w-10 pl-4">
+                  <Checkbox
+                    checked={allVisibleSelected}
+                    onCheckedChange={toggleSelectAll}
+                    aria-label="Select all"
+                    className={someVisibleSelected ? "opacity-70" : ""}
+                  />
+                </TableHead>
+                <TableHead>Document</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Size</TableHead>
                 <TableHead>Chunks</TableHead>
                 <TableHead>Added</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="text-right w-16">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((doc) => (
-                <TableRow key={doc.id} className="group">
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-md bg-primary/8 flex items-center justify-center shrink-0">
-                        <File className="h-4 w-4 text-primary/60" />
+              {filtered.map((doc) => {
+                const isSelected = selectedIds.has(doc.id);
+                return (
+                  <TableRow
+                    key={doc.id}
+                    className={`group cursor-pointer ${isSelected ? "bg-primary/5 hover:bg-primary/8" : ""}`}
+                    onClick={() => toggleSelect(doc.id)}
+                  >
+                    <TableCell className="pl-4" onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => toggleSelect(doc.id)}
+                        aria-label={`Select ${doc.originalName}`}
+                      />
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2.5">
+                        <div className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 transition-colors ${isSelected ? "bg-primary/15" : "bg-primary/8"}`}>
+                          <File className={`h-4 w-4 transition-colors ${isSelected ? "text-primary" : "text-primary/60"}`} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate max-w-[240px] text-sm font-medium" title={doc.originalName}>{doc.originalName}</p>
+                          <p className="text-xs text-muted-foreground">ID #{doc.id}</p>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="truncate max-w-[240px] text-sm font-medium" title={doc.originalName}>{doc.originalName}</p>
-                        <p className="text-xs text-muted-foreground">ID #{doc.id}</p>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>{getStatusBadge(doc.status, doc.errorMessage)}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary" className="font-mono text-[11px]">{getMimeLabel(doc.mimeType)}</Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">{formatSize(doc.fileSize)}</TableCell>
-                  <TableCell>
-                    {doc.chunkCount > 0 ? (
-                      <span className="inline-flex items-center gap-1 text-sm">
-                        <Layers className="h-3.5 w-3.5 text-muted-foreground" />
-                        {doc.chunkCount.toLocaleString()}
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground text-sm">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-sm whitespace-nowrap">
-                    {format(new Date(doc.createdAt), "MMM d, yyyy")}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDelete(doc.id)}
-                      className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+                    </TableCell>
+                    <TableCell>{getStatusBadge(doc.status, doc.errorMessage)}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className="font-mono text-[11px]">{getMimeLabel(doc.mimeType)}</Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm">{formatSize(doc.fileSize)}</TableCell>
+                    <TableCell>
+                      {doc.chunkCount > 0 ? (
+                        <span className="inline-flex items-center gap-1 text-sm">
+                          <Layers className="h-3.5 w-3.5 text-muted-foreground" />
+                          {doc.chunkCount.toLocaleString()}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm whitespace-nowrap">
+                      {format(new Date(doc.createdAt), "MMM d, yyyy")}
+                    </TableCell>
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(doc.id)}
+                        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         )}
