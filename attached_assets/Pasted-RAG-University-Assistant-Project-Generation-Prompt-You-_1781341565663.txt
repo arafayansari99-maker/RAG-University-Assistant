@@ -1,0 +1,393 @@
+RAG University Assistant – Project Generation Prompt
+
+You are a Senior AI Engineer, Machine Learning Engineer, and Full-Stack Developer.
+
+Build a production-ready University Knowledge Assistant using Retrieval-Augmented Generation (RAG).
+
+The system should allow students to ask questions about university policies, courses, regulations, schedules, fee structures, admission requirements, academic calendars, faculty information, and student services by chatting with university documents.
+
+The application should provide accurate, source-grounded answers with citations.
+
+Project Goal
+
+Create an AI-powered chatbot that can answer university-related questions from uploaded documents instead of relying solely on an LLM's memory.
+
+Examples:
+
+Student Question
+
+What is the minimum CGPA required for Final Year Project registration?
+
+Assistant Answer
+
+Students must maintain a CGPA of 2.0 or above to register for FYP.
+
+Source:
+Academic Regulations.pdf
+Page 12
+Core Features
+Document Upload
+
+Support:
+
+PDF
+DOCX
+TXT
+
+Users can upload:
+
+Student handbook
+Academic regulations
+Admission policies
+Course catalogs
+University prospectus
+Fee schedules
+Document Processing Pipeline
+
+Implement:
+
+Document Upload
+      ↓
+Text Extraction
+      ↓
+Cleaning
+      ↓
+Chunking
+      ↓
+Embedding Generation
+      ↓
+Vector Storage
+      ↓
+Retrieval
+      ↓
+LLM Response
+      ↓
+Citation Generation
+Tech Stack
+
+Backend:
+
+Python
+FastAPI
+
+AI Components:
+
+LangChain
+FAISS
+Sentence Transformers
+HuggingFace
+
+Frontend:
+
+React
+TailwindCSS
+
+Database:
+
+SQLite
+
+Deployment:
+
+Docker
+Embedding Model
+
+Use:
+
+sentence-transformers/all-MiniLM-L6-v2
+
+Generate embeddings locally.
+
+No paid APIs required.
+
+Vector Database
+
+Use:
+
+FAISS
+
+Store:
+
+Chunk text
+Document name
+Page number
+Metadata
+RAG Pipeline
+
+When a user asks a question:
+
+Convert question into embedding.
+Search vector database.
+Retrieve Top-K chunks.
+Pass chunks to LLM.
+Generate answer.
+Include citations.
+
+Example:
+
+Question:
+What is the attendance requirement?
+
+Retrieved Context:
+Student Handbook Page 24
+
+Answer:
+Students must maintain at least 75% attendance in each course.
+
+Source:
+Student Handbook.pdf Page 24
+LLM Options
+
+Implement support for:
+
+Local LLM
+
+Using:
+
+Ollama
+Mistral 7B
+Llama 3
+Gemma
+API Option
+
+Support:
+
+Gemini
+OpenAI
+
+Use environment variables.
+
+Chat Interface
+
+Create a modern chatbot UI.
+
+Features:
+
+Chat history
+Streaming responses
+Typing indicator
+Source references
+Dark mode
+Mobile responsive
+Citation System
+
+Every answer must include:
+
+Source:
+Academic Regulations.pdf
+Page 12
+
+Support multiple citations:
+
+Sources:
+Academic Regulations.pdf Page 12
+Student Handbook.pdf Page 18
+Smart Retrieval
+
+Implement:
+
+Semantic Search
+
+Use embeddings.
+
+Keyword Search
+
+Use BM25.
+
+Hybrid Retrieval
+
+Combine:
+
+Embedding Similarity
++
+BM25 Search
+
+for improved accuracy.
+
+Advanced Features
+Conversation Memory
+
+Allow:
+
+User:
+What is the attendance policy?
+
+Assistant:
+75%
+
+User:
+What happens if I fall below that?
+
+Maintain context.
+
+Multi-Document Retrieval
+
+Search across:
+
+Handbook
+Regulations
+Prospectus
+
+simultaneously.
+
+Query Rewriting
+
+Rewrite vague questions.
+
+Example:
+
+What about scholarships?
+
+↓
+
+What scholarship opportunities are available for undergraduate students?
+Suggested Questions
+
+Generate:
+
+What is the grading policy?
+How do I apply for scholarships?
+What is the fee structure?
+What is the attendance requirement?
+Admin Dashboard
+
+Allow administrators to:
+
+Upload Documents
+Delete Documents
+Rebuild Vector Index
+Monitor Queries
+View Analytics
+Analytics Dashboard
+
+Show:
+
+Most asked questions
+Daily users
+Query success rate
+Retrieval accuracy
+
+Visualizations:
+
+Charts
+Graphs
+Statistics
+Database Schema
+
+Tables:
+
+Users
+Documents
+DocumentChunks
+ChatHistory
+Feedback
+Analytics
+API Endpoints
+
+Create:
+
+POST /upload-document
+
+POST /chat
+
+GET /chat-history
+
+DELETE /document/{id}
+
+POST /rebuild-index
+
+GET /analytics
+Security
+
+Implement:
+
+Authentication
+JWT tokens
+Rate limiting
+File validation
+Secure uploads
+Evaluation System
+
+Measure:
+
+Retrieval Metrics
+Precision@K
+Recall@K
+Response Metrics
+Context Relevance
+Groundedness
+Citation Accuracy
+Deployment
+
+Provide:
+
+Dockerfile
+Docker Compose
+Environment Variables
+
+Deployable on:
+
+Hugging Face Spaces
+Render
+Railway
+Documentation
+
+Generate:
+
+Complete README
+Installation Guide
+API Documentation
+Architecture Diagram
+Deployment Guide
+Folder Structure
+rag-university-assistant/
+│
+├── backend/
+│   ├── api/
+│   ├── rag/
+│   ├── embeddings/
+│   ├── retrieval/
+│   └── database/
+│
+├── frontend/
+│   ├── components/
+│   ├── pages/
+│   └── services/
+│
+├── documents/
+├── tests/
+├── docker/
+├── docs/
+├── README.md
+└── requirements.txt
+Resume-Winning Features (Add These)
+
+Most students stop at a basic chatbot. To stand out:
+
+1. Hallucination Detection Layer
+Detect when retrieved context is insufficient.
+
+Respond:
+
+"I couldn't find enough information in the university documents to answer confidently."
+
+2. Citation-Based Confidence Score
+
+Example:
+
+Answer Confidence: 94%
+
+Sources:
+Academic Regulations.pdf Page 12
+Student Handbook.pdf Page 18
+3. Feedback Loop
+
+Allow users to rate answers:
+
+👍 Helpful
+👎 Not Helpful
+
+Store feedback for future improvements.
+
+4. Admin Analytics Dashboard
+
+Shows that you understand production AI systems, not just model building.
