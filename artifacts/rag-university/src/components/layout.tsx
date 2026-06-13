@@ -1,8 +1,13 @@
 import { Link, useLocation } from "wouter";
-import { Library, FileText, BarChart3, Search, Settings } from "lucide-react";
+import { Library, FileText, BarChart3, Search, Sun, Moon, Monitor } from "lucide-react";
+import { useTheme } from "next-themes";
+import { useEffect, useState } from "react";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const navItems = [
     { href: "/", label: "Research Chat", icon: Search },
@@ -42,9 +47,30 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </nav>
         
         <div className="p-4 border-t border-border">
-          <div className="flex items-center gap-3 px-3 py-2 text-sm text-muted-foreground">
-            <Settings className="h-4 w-4" />
-            <span>Preferences</span>
+          <div className="flex items-center gap-2 px-1">
+            <span className="text-xs text-muted-foreground mr-auto">Theme</span>
+            {mounted && (
+              <div className="flex items-center bg-secondary rounded-md p-0.5 gap-0.5">
+                {([
+                  { value: "light", icon: Sun },
+                  { value: "system", icon: Monitor },
+                  { value: "dark", icon: Moon },
+                ] as const).map(({ value, icon: Icon }) => (
+                  <button
+                    key={value}
+                    onClick={() => setTheme(value)}
+                    title={value.charAt(0).toUpperCase() + value.slice(1)}
+                    className={`p-1.5 rounded transition-colors ${
+                      theme === value
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </aside>
