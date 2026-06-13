@@ -24,6 +24,7 @@ import type {
   ChatMessage,
   ChatSession,
   Document,
+  DocumentChunk,
   FeedbackInput,
   HealthStatus,
   QuestionInput,
@@ -343,6 +344,83 @@ export const useDeleteDocument = <TError = ErrorType<void>,
       > => {
       return useMutation(getDeleteDocumentMutationOptions(options));
     }
+
+export const getGetDocumentChunksUrl = (id: number,) => {
+
+
+
+
+  return `/api/documents/${id}/chunks`
+}
+
+/**
+ * @summary Get all chunks for a document
+ */
+export const getDocumentChunks = async (id: number, options?: RequestInit): Promise<DocumentChunk[]> => {
+
+  return customFetch<DocumentChunk[]>(getGetDocumentChunksUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDocumentChunksQueryKey = (id: number,) => {
+    return [
+    `/api/documents/${id}/chunks`
+    ] as const;
+    }
+
+
+export const getGetDocumentChunksQueryOptions = <TData = Awaited<ReturnType<typeof getDocumentChunks>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDocumentChunks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDocumentChunksQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDocumentChunks>>> = ({ signal }) => getDocumentChunks(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDocumentChunks>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDocumentChunksQueryResult = NonNullable<Awaited<ReturnType<typeof getDocumentChunks>>>
+export type GetDocumentChunksQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get all chunks for a document
+ */
+
+export function useGetDocumentChunks<TData = Awaited<ReturnType<typeof getDocumentChunks>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDocumentChunks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDocumentChunksQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getRebuildIndexUrl = () => {
 

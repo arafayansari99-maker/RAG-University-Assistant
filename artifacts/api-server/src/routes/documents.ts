@@ -110,6 +110,33 @@ router.get("/documents/:id", async (req, res): Promise<void> => {
   res.json({ ...doc, createdAt: doc.createdAt.toISOString() });
 });
 
+// GET /documents/:id/chunks
+router.get("/documents/:id/chunks", async (req, res): Promise<void> => {
+  const params = GetDocumentParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [doc] = await db
+    .select({ id: documentsTable.id })
+    .from(documentsTable)
+    .where(eq(documentsTable.id, params.data.id));
+
+  if (!doc) {
+    res.status(404).json({ error: "Document not found" });
+    return;
+  }
+
+  const chunks = await db
+    .select()
+    .from(documentChunksTable)
+    .where(eq(documentChunksTable.documentId, params.data.id))
+    .orderBy(documentChunksTable.chunkIndex);
+
+  res.json(chunks.map((c) => ({ ...c, createdAt: c.createdAt.toISOString() })));
+});
+
 // DELETE /documents/:id
 router.delete("/documents/:id", async (req, res): Promise<void> => {
   const params = DeleteDocumentParams.safeParse(req.params);

@@ -62,6 +62,24 @@ export const DeleteDocumentParams = zod.object({
 
 
 /**
+ * @summary Get all chunks for a document
+ */
+export const GetDocumentChunksParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetDocumentChunksResponseItem = zod.object({
+  "id": zod.number(),
+  "documentId": zod.number(),
+  "chunkText": zod.string(),
+  "pageNumber": zod.number().nullish(),
+  "chunkIndex": zod.number(),
+  "createdAt": zod.string()
+})
+export const GetDocumentChunksResponse = zod.array(GetDocumentChunksResponseItem)
+
+
+/**
  * @summary Rebuild the search index for all documents
  */
 export const RebuildIndexResponse = zod.object({

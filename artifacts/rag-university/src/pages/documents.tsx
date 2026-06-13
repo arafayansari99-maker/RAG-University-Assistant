@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DocumentPreviewDrawer } from "@/components/document-preview-drawer";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -144,6 +145,8 @@ export default function DocumentsPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState<NonNullable<typeof documents>[number] | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const dragCounterRef = useRef(0);
 
   const { data: documents, isLoading } = useListDocuments({
@@ -641,7 +644,17 @@ export default function DocumentsPage() {
                           <File className={`h-4 w-4 transition-colors ${isSelected ? "text-primary" : "text-primary/60"}`} />
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate max-w-[240px] text-sm font-medium" title={doc.originalName}>{doc.originalName}</p>
+                          <button
+                            className="truncate max-w-[240px] text-sm font-medium text-left hover:text-primary hover:underline underline-offset-2 transition-colors block"
+                            title={doc.originalName}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPreviewDoc(doc);
+                              setPreviewOpen(true);
+                            }}
+                          >
+                            {doc.originalName}
+                          </button>
                           <p className="text-xs text-muted-foreground">ID #{doc.id}</p>
                         </div>
                       </div>
@@ -686,6 +699,16 @@ export default function DocumentsPage() {
       <UploadQueuePanel
         queue={queue}
         onClear={() => setQueue((q) => q.filter((i) => i.status !== "done" && i.status !== "error"))}
+      />
+
+      {/* Document preview drawer */}
+      <DocumentPreviewDrawer
+        doc={previewDoc}
+        open={previewOpen}
+        onOpenChange={(open) => {
+          setPreviewOpen(open);
+          if (!open) setTimeout(() => setPreviewDoc(null), 300);
+        }}
       />
     </div>
   );

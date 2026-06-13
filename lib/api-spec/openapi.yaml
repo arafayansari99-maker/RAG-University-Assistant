@@ -80,6 +80,29 @@ paths:
         "404":
           description: Not found
 
+  /documents/{id}/chunks:
+    get:
+      operationId: getDocumentChunks
+      tags: [documents]
+      summary: Get all chunks for a document
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of chunks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DocumentChunk"
+        "404":
+          description: Not found
+
   /documents/rebuild-index:
     post:
       operationId: rebuildIndex
@@ -270,6 +293,23 @@ components:
           enum: [processing, ready, error]
         errorMessage:
           type: ["string", "null"]
+        createdAt:
+          type: string
+
+    DocumentChunk:
+      type: object
+      required: [id, documentId, chunkText, chunkIndex, createdAt]
+      properties:
+        id:
+          type: integer
+        documentId:
+          type: integer
+        chunkText:
+          type: string
+        pageNumber:
+          type: ["integer", "null"]
+        chunkIndex:
+          type: integer
         createdAt:
           type: string
 

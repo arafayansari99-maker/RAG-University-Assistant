@@ -31,6 +31,16 @@ export interface Document {
   createdAt: string;
 }
 
+export interface DocumentChunk {
+  id: number;
+  documentId: number;
+  chunkText: string;
+  /** @nullable */
+  pageNumber?: number | null;
+  chunkIndex: number;
+  createdAt: string;
+}
+
 export interface RebuildResult {
   success: boolean;
   chunksIndexed: number;

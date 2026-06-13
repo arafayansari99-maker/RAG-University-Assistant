@@ -13,6 +13,7 @@ export * from './chatMessageRole';
 export * from './chatSession';
 export * from './citation';
 export * from './document';
+export * from './documentChunk';
 export * from './documentStatus';
 export * from './feedbackInput';
 export * from './feedbackInputFeedback';
