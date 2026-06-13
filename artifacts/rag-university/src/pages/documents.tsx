@@ -26,7 +26,16 @@ export default function DocumentsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
-  const { data: documents, isLoading } = useListDocuments();
+  const { data: documents, isLoading } = useListDocuments({
+    query: {
+      queryKey: getListDocumentsQueryKey(),
+      refetchInterval: (query) => {
+        const docs = query.state.data;
+        if (!docs) return false;
+        return docs.some((d) => d.status === "processing") ? 2500 : false;
+      },
+    },
+  });
   const deleteDoc = useDeleteDocument();
   const rebuildIndex = useRebuildIndex();
 
