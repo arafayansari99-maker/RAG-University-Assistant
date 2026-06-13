@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "RAG University Assistant"
+version = "1.0.0"
+id = "artifacts/rag-university"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18362
+
+[services.development]
+run = "pnpm --filter @workspace/rag-university run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/rag-university", "run", "build" ]
+publicDir = "artifacts/rag-university/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18362"
+BASE_PATH = "/"

@@ -1,22 +1,26 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: RAG University Assistant API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: documents
+    description: Document management
+  - name: chat
+    description: Chat operations
+  - name: analytics
+    description: Analytics and stats
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +28,355 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /documents:
+    get:
+      operationId: listDocuments
+      tags: [documents]
+      summary: List all uploaded documents
+      responses:
+        "200":
+          description: List of documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Document"
+
+  /documents/{id}:
+    get:
+      operationId: getDocument
+      tags: [documents]
+      summary: Get a document by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteDocument
+      tags: [documents]
+      summary: Delete a document
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  /documents/rebuild-index:
+    post:
+      operationId: rebuildIndex
+      tags: [documents]
+      summary: Rebuild the search index for all documents
+      responses:
+        "200":
+          description: Index rebuilt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RebuildResult"
+
+  /chat/sessions:
+    get:
+      operationId: listChatSessions
+      tags: [chat]
+      summary: List all chat sessions
+      responses:
+        "200":
+          description: List of sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChatSession"
+    post:
+      operationId: createChatSession
+      tags: [chat]
+      summary: Create a new chat session
+      responses:
+        "201":
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatSession"
+
+  /chat/sessions/{sessionId}:
+    delete:
+      operationId: deleteChatSession
+      tags: [chat]
+      summary: Delete a chat session and its history
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /chat/sessions/{sessionId}/messages:
+    get:
+      operationId: getChatHistory
+      tags: [chat]
+      summary: Get chat history for a session
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Message history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChatMessage"
+
+  /chat/ask:
+    post:
+      operationId: askQuestion
+      tags: [chat]
+      summary: Ask a question (streaming SSE response)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuestionInput"
+      responses:
+        "200":
+          description: Streaming SSE answer with citations
+        "400":
+          description: Bad request
+
+  /chat/messages/{messageId}/feedback:
+    post:
+      operationId: submitFeedback
+      tags: [chat]
+      summary: Submit thumbs up/down feedback on a message
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeedbackInput"
+      responses:
+        "200":
+          description: Feedback recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatMessage"
+
+  /analytics/stats:
+    get:
+      operationId: getAnalyticsStats
+      tags: [analytics]
+      summary: Get overall analytics stats
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsStats"
+
+  /analytics/top-questions:
+    get:
+      operationId: getTopQuestions
+      tags: [analytics]
+      summary: Get most asked questions
+      responses:
+        "200":
+          description: Top questions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TopQuestion"
+
+  /analytics/suggested-questions:
+    get:
+      operationId: getSuggestedQuestions
+      tags: [analytics]
+      summary: Get suggested questions for students
+      responses:
+        "200":
+          description: Suggested questions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
 
+    Document:
+      type: object
+      required: [id, filename, originalName, mimeType, fileSize, chunkCount, createdAt, status]
+      properties:
+        id:
+          type: integer
+        filename:
+          type: string
+        originalName:
+          type: string
+        mimeType:
+          type: string
+        fileSize:
+          type: integer
+        chunkCount:
+          type: integer
+        status:
+          type: string
+          enum: [processing, ready, error]
+        errorMessage:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    RebuildResult:
+      type: object
+      required: [success, chunksIndexed]
+      properties:
+        success:
+          type: boolean
+        chunksIndexed:
+          type: integer
+
+    ChatSession:
+      type: object
+      required: [id, title, createdAt, messageCount]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        createdAt:
+          type: string
+        messageCount:
+          type: integer
+        lastMessageAt:
+          type: ["string", "null"]
+
+    ChatMessage:
+      type: object
+      required: [id, sessionId, role, content, createdAt]
+      properties:
+        id:
+          type: integer
+        sessionId:
+          type: integer
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+        sources:
+          type: ["array", "null"]
+          items:
+            $ref: "#/components/schemas/Citation"
+        confidence:
+          type: ["number", "null"]
+        feedback:
+          type: ["string", "null"]
+          enum: [helpful, not_helpful, null]
+        createdAt:
+          type: string
+
+    Citation:
+      type: object
+      required: [documentName, pageNumber, chunkText]
+      properties:
+        documentName:
+          type: string
+        pageNumber:
+          type: ["integer", "null"]
+        chunkText:
+          type: string
+        score:
+          type: ["number", "null"]
+
+    QuestionInput:
+      type: object
+      required: [question]
+      properties:
+        question:
+          type: string
+          minLength: 1
+        sessionId:
+          type: ["integer", "null"]
+
+    FeedbackInput:
+      type: object
+      required: [feedback]
+      properties:
+        feedback:
+          type: string
+          enum: [helpful, not_helpful]
+
+    AnalyticsStats:
+      type: object
+      required: [totalDocuments, totalChunks, totalQuestions, totalSessions, helpfulRate, avgConfidence]
+      properties:
+        totalDocuments:
+          type: integer
+        totalChunks:
+          type: integer
+        totalQuestions:
+          type: integer
+        totalSessions:
+          type: integer
+        helpfulRate:
+          type: number
+        avgConfidence:
+          type: number
+        questionsToday:
+          type: integer
+
+    TopQuestion:
+      type: object
+      required: [question, count]
+      properties:
+        question:
+          type: string
+        count:
+          type: integer
