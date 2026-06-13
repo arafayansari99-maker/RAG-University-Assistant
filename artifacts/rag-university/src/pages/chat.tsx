@@ -17,6 +17,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import CitationDrawer from "@/components/citation-drawer";
+
+interface Citation {
+  documentName: string;
+  pageNumber: number | null;
+  chunkText: string;
+  score: number;
+}
 
 export default function ChatPage() {
   const queryClient = useQueryClient();
@@ -24,8 +32,12 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
-  const [streamingSources, setStreamingSources] = useState<any[]>([]);
+  const [streamingSources, setStreamingSources] = useState<Citation[]>([]);
   const [streamingConfidence, setStreamingConfidence] = useState<number | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [activeCitation, setActiveCitation] = useState<Citation | null>(null);
+  const [activeCitationIndex, setActiveCitationIndex] = useState(0);
+  const [lastQuestion, setLastQuestion] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Queries
@@ -89,6 +101,7 @@ export default function ChatPage() {
     setStreamingContent("");
     setStreamingSources([]);
     setStreamingConfidence(null);
+    setLastQuestion(questionText);
 
     // Optimistically add user message to history
     if (history) {
@@ -169,6 +182,7 @@ export default function ChatPage() {
   };
 
   return (
+    <>
     <div className="flex h-full">
       {/* Session History Sidebar */}
       <div className="w-72 border-r border-border bg-card flex flex-col hidden lg:flex">
@@ -271,18 +285,31 @@ export default function ChatPage() {
                             <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
                               <FileText className="h-3 w-3" />
                               Sources & Citations
+                              <span className="ml-auto text-[10px] font-normal normal-case text-muted-foreground/70">Click to preview</span>
                             </h4>
                             <div className="grid gap-2">
-                              {msg.sources.map((src, idx) => (
-                                <div key={idx} className="text-sm bg-secondary/50 p-3 rounded-lg flex items-start gap-3">
-                                  <Badge variant="outline" className="shrink-0 font-mono text-xs border-primary/20 text-primary">
+                              {(msg.sources as Citation[]).map((src, idx) => (
+                                <button
+                                  key={idx}
+                                  onClick={() => {
+                                    setActiveCitation(src);
+                                    setActiveCitationIndex(idx);
+                                    setDrawerOpen(true);
+                                  }}
+                                  className="text-sm bg-secondary/50 hover:bg-secondary p-3 rounded-lg flex items-start gap-3 text-left w-full transition-colors group cursor-pointer border border-transparent hover:border-primary/20"
+                                >
+                                  <Badge variant="outline" className="shrink-0 font-mono text-xs border-primary/20 text-primary mt-0.5">
                                     [{idx + 1}]
                                   </Badge>
-                                  <div>
-                                    <div className="font-medium text-foreground mb-1">{src.documentName} {src.pageNumber ? `(Page ${src.pageNumber})` : ''}</div>
-                                    <p className="text-muted-foreground text-xs leading-relaxed line-clamp-3 hover:line-clamp-none transition-all">{src.chunkText}</p>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="font-medium text-foreground mb-1 flex items-center gap-1.5">
+                                      {src.documentName}
+                                      {src.pageNumber ? <span className="text-muted-foreground font-normal">(Page {src.pageNumber})</span> : null}
+                                      <ChevronRight className="h-3 w-3 text-primary ml-auto opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                                    </div>
+                                    <p className="text-muted-foreground text-xs leading-relaxed line-clamp-2">{src.chunkText}</p>
                                   </div>
-                                </div>
+                                </button>
                               ))}
                             </div>
                           </div>
@@ -386,5 +413,13 @@ export default function ChatPage() {
         </div>
       </div>
     </div>
+    <CitationDrawer
+      open={drawerOpen}
+      onClose={() => setDrawerOpen(false)}
+      citation={activeCitation}
+      citationIndex={activeCitationIndex}
+      question={lastQuestion}
+    />
+    </>
   );
 }
