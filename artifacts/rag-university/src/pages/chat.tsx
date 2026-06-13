@@ -10,13 +10,14 @@ import {
   useAskQuestion
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Send, PlusCircle, MessageSquare, Trash2, ThumbsUp, ThumbsDown, FileText, ChevronRight, BookOpen, Library } from "lucide-react";
+import { Send, PlusCircle, MessageSquare, Trash2, ThumbsUp, ThumbsDown, FileText, ChevronRight, BookOpen, Library, Download, FileDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import CitationDrawer from "@/components/citation-drawer";
 
 interface Citation {
@@ -181,6 +182,104 @@ export default function ChatPage() {
     });
   };
 
+  const activeSession = sessions?.find((s) => s.id === activeSessionId);
+
+  const handleExportMarkdown = () => {
+    if (!history?.length) return;
+    const title = activeSession?.title ?? "Chat Export";
+    const date = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+    const lines: string[] = [
+      `# ${title}`,
+      `*Exported from Athena RAG — ${date}*`,
+      "",
+      "---",
+      "",
+    ];
+    for (const msg of history) {
+      if (msg.role === "user") {
+        lines.push(`**You:** ${msg.content}`, "");
+      } else {
+        lines.push(`**Athena:**`, "", msg.content, "");
+        const srcs = msg.sources as Citation[] | null;
+        if (srcs && srcs.length > 0) {
+          lines.push("*Sources:*");
+          srcs.forEach((s, i) => {
+            lines.push(`> [${i + 1}] **${s.documentName}**${s.pageNumber ? ` — Page ${s.pageNumber}` : ""}`);
+            lines.push(`> ${s.chunkText.slice(0, 200)}${s.chunkText.length > 200 ? "…" : ""}`);
+          });
+          lines.push("");
+        }
+        if (msg.confidence != null) {
+          lines.push(`*Confidence: ${(msg.confidence * 100).toFixed(0)}%*`, "");
+        }
+        lines.push("---", "");
+      }
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportPDF = () => {
+    if (!history?.length) return;
+    const title = activeSession?.title ?? "Chat Export";
+    const date = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+
+    const msgHtml = history.map((msg) => {
+      if (msg.role === "user") {
+        return `<div class="msg user"><div class="bubble">${msg.content.replace(/</g, "&lt;")}</div></div>`;
+      }
+      const srcs = msg.sources as Citation[] | null;
+      const sourcesHtml = srcs && srcs.length > 0
+        ? `<div class="sources"><div class="sources-label">Sources & Citations</div>${srcs.map((s, i) =>
+            `<div class="source"><span class="src-idx">[${i + 1}]</span><div><strong>${s.documentName.replace(/</g, "&lt;")}${s.pageNumber ? ` — Page ${s.pageNumber}` : ""}</strong><p>${s.chunkText.slice(0, 300).replace(/</g, "&lt;")}${s.chunkText.length > 300 ? "…" : ""}</p></div></div>`
+          ).join("")}</div>`
+        : "";
+      const confHtml = msg.confidence != null
+        ? `<div class="confidence">Confidence: ${(msg.confidence * 100).toFixed(0)}%</div>`
+        : "";
+      return `<div class="msg assistant"><div class="content">${msg.content.replace(/</g, "&lt;").replace(/\n/g, "<br>")}</div>${sourcesHtml}${confHtml}</div>`;
+    }).join("");
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>${title}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@400;500;600&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', sans-serif; font-size: 13px; line-height: 1.6; color: #1e2a3a; background: #fff; padding: 48px; max-width: 780px; margin: 0 auto; }
+  h1 { font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 700; margin-bottom: 4px; }
+  .meta { color: #64748b; font-size: 11px; margin-bottom: 32px; padding-bottom: 16px; border-bottom: 1px solid #e2e8f0; }
+  .msg { margin-bottom: 24px; }
+  .msg.user { display: flex; justify-content: flex-end; }
+  .msg.user .bubble { background: #f1f5f9; border-radius: 12px 12px 2px 12px; padding: 10px 14px; max-width: 70%; font-size: 13px; }
+  .msg.assistant .content { font-size: 13px; white-space: pre-wrap; margin-bottom: 10px; }
+  .sources { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-top: 8px; }
+  .sources-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #64748b; margin-bottom: 8px; }
+  .source { display: flex; gap: 8px; margin-bottom: 8px; font-size: 11px; }
+  .source:last-child { margin-bottom: 0; }
+  .src-idx { font-family: monospace; font-weight: 700; color: #1e3a5f; white-space: nowrap; }
+  .source strong { display: block; color: #1e2a3a; margin-bottom: 2px; }
+  .source p { color: #64748b; }
+  .confidence { font-size: 10px; color: #64748b; margin-top: 6px; }
+  @media print { body { padding: 24px; } }
+</style></head><body>
+<h1>${title.replace(/</g, "&lt;")}</h1>
+<div class="meta">Exported from Athena RAG &mdash; ${date}</div>
+${msgHtml}
+</body></html>`;
+
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); }, 600);
+  };
+
   return (
     <>
     <div className="flex h-full">
@@ -233,6 +332,40 @@ export default function ChatPage() {
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col bg-background relative">
+        {/* Session toolbar — visible when messages exist */}
+        {activeSessionId && (history?.length ?? 0) > 0 && !isStreaming && (
+          <div className="shrink-0 h-10 border-b border-border flex items-center justify-between px-4 md:px-8 bg-background/80 backdrop-blur-sm">
+            <span className="text-xs text-muted-foreground truncate max-w-[60%]">
+              {activeSession?.title}
+            </span>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground">
+                  <Download className="h-3.5 w-3.5" />
+                  Export
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuLabel className="text-xs">Export conversation</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleExportMarkdown} className="gap-2 cursor-pointer">
+                  <FileDown className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium">Markdown (.md)</p>
+                    <p className="text-xs text-muted-foreground">Plain text with formatting</p>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportPDF} className="gap-2 cursor-pointer">
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium">PDF</p>
+                    <p className="text-xs text-muted-foreground">Print-ready document</p>
+                  </div>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
         <div className="flex-1 overflow-y-auto p-4 md:p-8" ref={scrollRef}>
           {!activeSessionId && !history?.length && !isStreaming ? (
             <div className="h-full flex flex-col items-center justify-center max-w-2xl mx-auto text-center space-y-6">
