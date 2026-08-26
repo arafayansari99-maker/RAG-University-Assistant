@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { chatSessionsTable, chatMessagesTable } from "@workspace/db";
+import devDb from "../lib/dev-db";
 import { eq, desc, count, sql } from "drizzle-orm";
 import {
   GetChatHistoryParams,
@@ -17,42 +18,59 @@ const router: IRouter = Router();
 
 // GET /chat/sessions
 router.get("/chat/sessions", async (_req, res): Promise<void> => {
-  const sessions = await db
-    .select({
-      id: chatSessionsTable.id,
-      title: chatSessionsTable.title,
-      createdAt: chatSessionsTable.createdAt,
-      lastMessageAt: chatSessionsTable.lastMessageAt,
-    })
-    .from(chatSessionsTable)
-    .orderBy(desc(chatSessionsTable.lastMessageAt));
+  try {
+    if (!process.env.DATABASE_URL) {
+      const out = await devDb.listChatSessions();
+      res.json(out);
+      return;
+    }
 
-  const sessionIds = sessions.map((s) => s.id);
-  const messageCounts =
-    sessionIds.length > 0
-      ? await db
-          .select({
-            sessionId: chatMessagesTable.sessionId,
-            count: count(),
-          })
-          .from(chatMessagesTable)
-          .groupBy(chatMessagesTable.sessionId)
-      : [];
+    const sessions = await db
+      .select({
+        id: chatSessionsTable.id,
+        title: chatSessionsTable.title,
+        createdAt: chatSessionsTable.createdAt,
+        lastMessageAt: chatSessionsTable.lastMessageAt,
+      })
+      .from(chatSessionsTable)
+      .orderBy(desc(chatSessionsTable.lastMessageAt));
 
-  const countMap = new Map(messageCounts.map((mc) => [mc.sessionId, Number(mc.count)]));
+    const sessionIds = sessions.map((s) => s.id);
+    const messageCounts =
+      sessionIds.length > 0
+        ? await db
+            .select({
+              sessionId: chatMessagesTable.sessionId,
+              count: count(),
+            })
+            .from(chatMessagesTable)
+            .groupBy(chatMessagesTable.sessionId)
+        : [];
 
-  res.json(
-    sessions.map((s) => ({
-      ...s,
-      createdAt: s.createdAt.toISOString(),
-      lastMessageAt: s.lastMessageAt ? s.lastMessageAt.toISOString() : null,
-      messageCount: countMap.get(s.id) ?? 0,
-    }))
-  );
+    const countMap = new Map(messageCounts.map((mc) => [mc.sessionId, Number(mc.count)]));
+
+    res.json(
+      sessions.map((s) => ({
+        ...s,
+        createdAt: s.createdAt.toISOString(),
+        lastMessageAt: s.lastMessageAt ? s.lastMessageAt.toISOString() : null,
+        messageCount: countMap.get(s.id) ?? 0,
+      }))
+    );
+  } catch (err) {
+    console.error("Failed to list chat sessions:", err);
+    res.json([]);
+  }
 });
 
 // POST /chat/sessions
 router.post("/chat/sessions", async (_req, res): Promise<void> => {
+  if (!process.env.DATABASE_URL) {
+    const s = await devDb.createChatSessionDev("New Chat");
+    res.status(201).json(s);
+    return;
+  }
+
   const [session] = await db
     .insert(chatSessionsTable)
     .values({ title: "New Chat" })
@@ -74,6 +92,12 @@ router.delete("/chat/sessions/:sessionId", async (req, res): Promise<void> => {
     return;
   }
 
+  if (!process.env.DATABASE_URL) {
+    await devDb.deleteChatSessionDev(params.data.sessionId);
+    res.sendStatus(204);
+    return;
+  }
+
   await db
     .delete(chatSessionsTable)
     .where(eq(chatSessionsTable.id, params.data.sessionId));
@@ -89,19 +113,30 @@ router.get("/chat/sessions/:sessionId/messages", async (req, res): Promise<void>
     return;
   }
 
-  const messages = await db
-    .select()
-    .from(chatMessagesTable)
-    .where(eq(chatMessagesTable.sessionId, params.data.sessionId))
-    .orderBy(chatMessagesTable.createdAt);
+  if (!process.env.DATABASE_URL) {
+    const msgs = await devDb.getChatMessagesDev(params.data.sessionId);
+    res.json(msgs);
+    return;
+  }
 
-  res.json(
-    messages.map((m) => ({
-      ...m,
-      sources: m.sources ?? null,
-      createdAt: m.createdAt.toISOString(),
-    }))
-  );
+  try {
+    const messages = await db
+      .select()
+      .from(chatMessagesTable)
+      .where(eq(chatMessagesTable.sessionId, params.data.sessionId))
+      .orderBy(chatMessagesTable.createdAt);
+
+    res.json(
+      messages.map((m) => ({
+        ...m,
+        sources: m.sources ?? null,
+        createdAt: m.createdAt.toISOString(),
+      }))
+    );
+  } catch (err) {
+    console.error("Failed to fetch chat messages:", err);
+    res.json([]);
+  }
 });
 
 // POST /chat/ask (SSE streaming)
@@ -121,39 +156,58 @@ router.post("/chat/ask", async (req, res): Promise<void> => {
   // Ensure session exists
   let activeSessionId = sessionId ?? null;
   if (!activeSessionId) {
-    const [newSession] = await db
-      .insert(chatSessionsTable)
-      .values({ title: question.slice(0, 60) })
-      .returning();
-    activeSessionId = newSession.id;
-    res.write(`data: ${JSON.stringify({ sessionId: activeSessionId })}\n\n`);
+    if (!process.env.DATABASE_URL) {
+      const newSession = await devDb.createChatSessionDev(question.slice(0, 60));
+      activeSessionId = newSession.id;
+      res.write(`data: ${JSON.stringify({ sessionId: activeSessionId })}\n\n`);
+    } else {
+      const [newSession] = await db
+        .insert(chatSessionsTable)
+        .values({ title: question.slice(0, 60) })
+        .returning();
+      activeSessionId = newSession.id;
+      res.write(`data: ${JSON.stringify({ sessionId: activeSessionId })}\n\n`);
+    }
   } else {
-    // Update title if it's still "New Chat"
-    const [existing] = await db
-      .select()
-      .from(chatSessionsTable)
-      .where(eq(chatSessionsTable.id, activeSessionId));
-    if (existing?.title === "New Chat") {
-      await db
-        .update(chatSessionsTable)
-        .set({ title: question.slice(0, 60) })
+    if (!process.env.DATABASE_URL) {
+      // no-op: dev sessions are title-updated on creation
+    } else {
+      // Update title if it's still "New Chat"
+      const [existing] = await db
+        .select()
+        .from(chatSessionsTable)
         .where(eq(chatSessionsTable.id, activeSessionId));
+      if (existing?.title === "New Chat") {
+        await db
+          .update(chatSessionsTable)
+          .set({ title: question.slice(0, 60) })
+          .where(eq(chatSessionsTable.id, activeSessionId));
+      }
     }
   }
 
   // Save user message
-  await db.insert(chatMessagesTable).values({
-    sessionId: activeSessionId,
-    role: "user",
-    content: question,
-  });
+  if (!process.env.DATABASE_URL) {
+    await devDb.insertChatMessageDev({ sessionId: activeSessionId!, role: "user", content: question });
+  } else {
+    await db.insert(chatMessagesTable).values({
+      sessionId: activeSessionId,
+      role: "user",
+      content: question,
+    });
+  }
 
   // Get conversation history
-  const history = await db
-    .select({ role: chatMessagesTable.role, content: chatMessagesTable.content })
-    .from(chatMessagesTable)
-    .where(eq(chatMessagesTable.sessionId, activeSessionId))
-    .orderBy(chatMessagesTable.createdAt);
+  let history: any[] = [];
+  if (!process.env.DATABASE_URL) {
+    history = await devDb.getChatMessagesDev(activeSessionId!);
+  } else {
+    history = await db
+      .select({ role: chatMessagesTable.role, content: chatMessagesTable.content })
+      .from(chatMessagesTable)
+      .where(eq(chatMessagesTable.sessionId, activeSessionId))
+      .orderBy(chatMessagesTable.createdAt);
+  }
 
   // Retrieve relevant chunks
   const chunks: RetrievedChunk[] = await retrieveChunks(question, 5);
@@ -185,32 +239,38 @@ router.post("/chat/ask", async (req, res): Promise<void> => {
   const confidence = calculateConfidence(chunks, fullResponse);
 
   // Save assistant message
-  const [savedMsg] = await db
-    .insert(chatMessagesTable)
-    .values({
-      sessionId: activeSessionId!,
-      role: "assistant",
-      content: fullResponse,
-      sources: citations.length > 0 ? citations : null,
-      confidence,
-    })
-    .returning();
+  let savedMsg: any = null;
+  if (!process.env.DATABASE_URL) {
+    savedMsg = await devDb.insertChatMessageDev({ sessionId: activeSessionId!, role: "assistant", content: fullResponse, sources: citations.length > 0 ? citations : null, confidence });
+  } else {
+    const [s] = await db
+      .insert(chatMessagesTable)
+      .values({
+        sessionId: activeSessionId!,
+        role: "assistant",
+        content: fullResponse,
+        sources: citations.length > 0 ? citations : null,
+        confidence,
+      })
+      .returning();
+    savedMsg = s;
 
-  // Update session last message time
-  await db
-    .update(chatSessionsTable)
-    .set({ lastMessageAt: new Date() })
-    .where(eq(chatSessionsTable.id, activeSessionId!));
+    // Update session last message time
+    await db
+      .update(chatSessionsTable)
+      .set({ lastMessageAt: new Date() })
+      .where(eq(chatSessionsTable.id, activeSessionId!));
+  }
 
-  res.write(
-    `data: ${JSON.stringify({
-      done: true,
-      messageId: savedMsg.id,
-      sources: citations,
-      confidence,
-      sessionId: activeSessionId,
-    })}\n\n`
-  );
+    res.write(
+      `data: ${JSON.stringify({
+        done: true,
+        messageId: savedMsg.id,
+        sources: citations,
+        confidence,
+        sessionId: activeSessionId,
+      })}\n\n`
+    );
   res.end();
 });
 

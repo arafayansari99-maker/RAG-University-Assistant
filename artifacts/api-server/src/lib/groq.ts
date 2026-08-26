@@ -2,11 +2,28 @@ import Groq from "groq-sdk";
 import { logger } from "./logger";
 import type { RetrievedChunk } from "./rag";
 
+// If GROQ_API_KEY is not set, export a lightweight mock client so the
+// server can run locally without an external API key. Endpoints that
+// actually call the Groq API will receive an error at runtime.
+let groqClient: any = null;
 if (!process.env.GROQ_API_KEY) {
-  throw new Error("GROQ_API_KEY must be set.");
+  logger.warn("GROQ_API_KEY not set; using mock Groq client for local runs");
+  groqClient = {
+    chat: {
+      completions: {
+        create: async () => {
+          throw new Error(
+            "GROQ_API_KEY not configured — Chat completions unavailable in local mode"
+          );
+        },
+      },
+    },
+  };
+} else {
+  groqClient = new Groq({ apiKey: process.env.GROQ_API_KEY });
 }
 
-export const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+export const groq = groqClient;
 
 export const GROQ_MODEL = "llama-3.3-70b-versatile";
 

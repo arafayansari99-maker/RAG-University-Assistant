@@ -31,4 +31,13 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 app.use("/api", router);
 
+// Basic root endpoint for convenience (helps browsers hitting `/`)
+app.get("/", (_req, res) => {
+  res.json({
+    message: "RAG University Assistant API",
+    health: "/api/healthz",
+    docs: ["/api/chat", "/api/documents"],
+  });
+});
+
 export default app;

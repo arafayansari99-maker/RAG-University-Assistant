@@ -2,6 +2,7 @@ import path from "path";
 import fs from "fs/promises";
 import { db } from "@workspace/db";
 import { documentChunksTable, documentsTable } from "@workspace/db";
+import devDb from "./dev-db";
 import { eq, sql } from "drizzle-orm";
 import { logger } from "./logger";
 
@@ -20,7 +21,8 @@ export async function ensureUploadsDir() {
 
 export async function extractText(filePath: string, mimeType: string): Promise<{ text: string; pageCount: number }> {
   if (mimeType === "application/pdf" || filePath.endsWith(".pdf")) {
-    const pdfParse = (await import("pdf-parse")).default;
+    const pdfModule = await import("pdf-parse");
+    const pdfParse: any = (pdfModule as any)?.default ?? (pdfModule as any);
     const buffer = await fs.readFile(filePath);
     const result = await pdfParse(buffer);
     return { text: result.text, pageCount: result.numpages };
@@ -93,20 +95,48 @@ export interface RetrievedChunk {
 }
 
 export async function retrieveChunks(query: string, topK = 5): Promise<RetrievedChunk[]> {
-  // Get all chunks with document info
-  const chunks = await db
-    .select({
-      chunkId: documentChunksTable.id,
-      documentId: documentChunksTable.documentId,
-      documentName: documentsTable.originalName,
-      chunkText: documentChunksTable.chunkText,
-      pageNumber: documentChunksTable.pageNumber,
-    })
-    .from(documentChunksTable)
-    .innerJoin(documentsTable, eq(documentChunksTable.documentId, documentsTable.id))
-    .where(eq(documentsTable.status, "ready"));
+  // If drizzle DB is not initialized (dev fallback), return no chunks
+  if (!db) {
+    try {
+      // Try dev-db (in-memory) for basic dev experience
+      const docs = await devDb.listDocumentsDev();
+      const allChunks: RetrievedChunk[] = [];
+      for (const d of docs) {
+        const cs = await devDb.getDocumentChunksDev(d.id);
+        for (const c of cs) {
+          allChunks.push({
+            chunkId: c.id,
+            documentId: d.id,
+            documentName: d.originalName,
+            chunkText: c.chunkText,
+            pageNumber: c.pageNumber,
+            score: 0,
+          });
+        }
+      }
+      if (allChunks.length === 0) return [];
+      // continue with local scoring below
+      var chunks = allChunks;
+    } catch (e) {
+      return [];
+    }
+  } else {
+    // Get all chunks with document info
+    const chunksRes = await db
+      .select({
+        chunkId: documentChunksTable.id,
+        documentId: documentChunksTable.documentId,
+        documentName: documentsTable.originalName,
+        chunkText: documentChunksTable.chunkText,
+        pageNumber: documentChunksTable.pageNumber,
+      })
+      .from(documentChunksTable)
+      .innerJoin(documentsTable, eq(documentChunksTable.documentId, documentsTable.id))
+      .where(eq(documentsTable.status, "ready"));
 
-  if (chunks.length === 0) return [];
+    if (chunksRes.length === 0) return [];
+    var chunks = chunksRes;
+  }
 
   // Also do PostgreSQL full-text search for keyword boost
   let ftsIds = new Set<number>();

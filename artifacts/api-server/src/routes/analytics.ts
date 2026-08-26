@@ -2,89 +2,118 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { documentsTable, documentChunksTable, chatMessagesTable, chatSessionsTable } from "@workspace/db";
 import { eq, count, avg, gte, sql } from "drizzle-orm";
+import devDb from "../lib/dev-db";
 
 const router: IRouter = Router();
 
 // GET /analytics/stats
 router.get("/analytics/stats", async (_req, res): Promise<void> => {
-  const [docStats] = await db
-    .select({
-      totalDocuments: count(documentsTable.id),
-    })
-    .from(documentsTable);
+  try {
+    if (!process.env.DATABASE_URL) {
+      const stats = await devDb.analyticsStatsDev();
+      res.json(stats);
+      return;
+    }
+    const [docStats] = await db
+      .select({
+        totalDocuments: count(documentsTable.id),
+      })
+      .from(documentsTable);
 
-  const [chunkStats] = await db
-    .select({
-      totalChunks: count(documentChunksTable.id),
-    })
-    .from(documentChunksTable);
+    const [chunkStats] = await db
+      .select({
+        totalChunks: count(documentChunksTable.id),
+      })
+      .from(documentChunksTable);
 
-  const [sessionStats] = await db
-    .select({
-      totalSessions: count(chatSessionsTable.id),
-    })
-    .from(chatSessionsTable);
+    const [sessionStats] = await db
+      .select({
+        totalSessions: count(chatSessionsTable.id),
+      })
+      .from(chatSessionsTable);
 
-  const [msgStats] = await db
-    .select({
-      totalQuestions: count(chatMessagesTable.id),
-    })
-    .from(chatMessagesTable)
-    .where(eq(chatMessagesTable.role, "user"));
+    const [msgStats] = await db
+      .select({
+        totalQuestions: count(chatMessagesTable.id),
+      })
+      .from(chatMessagesTable)
+      .where(eq(chatMessagesTable.role, "user"));
 
-  const [feedbackStats] = await db
-    .select({
-      helpfulCount: sql<number>`COUNT(*) FILTER (WHERE feedback = 'helpful')`,
-      totalFeedback: sql<number>`COUNT(*) FILTER (WHERE feedback IS NOT NULL)`,
-    })
-    .from(chatMessagesTable)
-    .where(eq(chatMessagesTable.role, "assistant"));
+    const [feedbackStats] = await db
+      .select({
+        helpfulCount: sql<number>`COUNT(*) FILTER (WHERE feedback = 'helpful')`,
+        totalFeedback: sql<number>`COUNT(*) FILTER (WHERE feedback IS NOT NULL)`,
+      })
+      .from(chatMessagesTable)
+      .where(eq(chatMessagesTable.role, "assistant"));
 
-  const [confStats] = await db
-    .select({
-      avgConf: avg(chatMessagesTable.confidence),
-    })
-    .from(chatMessagesTable)
-    .where(eq(chatMessagesTable.role, "assistant"));
+    const [confStats] = await db
+      .select({
+        avgConf: avg(chatMessagesTable.confidence),
+      })
+      .from(chatMessagesTable)
+      .where(eq(chatMessagesTable.role, "assistant"));
 
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const [todayStats] = await db
-    .select({ count: count() })
-    .from(chatMessagesTable)
-    .where(
-      sql`${chatMessagesTable.role} = 'user' AND ${chatMessagesTable.createdAt} >= ${todayStart}`
-    );
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const [todayStats] = await db
+      .select({ count: count() })
+      .from(chatMessagesTable)
+      .where(
+        sql`${chatMessagesTable.role} = 'user' AND ${chatMessagesTable.createdAt} >= ${todayStart}`
+      );
 
-  const helpful = Number(feedbackStats?.helpfulCount ?? 0);
-  const total = Number(feedbackStats?.totalFeedback ?? 0);
-  const helpfulRate = total > 0 ? Math.round((helpful / total) * 100) / 100 : 0;
+    const helpful = Number(feedbackStats?.helpfulCount ?? 0);
+    const total = Number(feedbackStats?.totalFeedback ?? 0);
+    const helpfulRate = total > 0 ? Math.round((helpful / total) * 100) / 100 : 0;
 
-  res.json({
-    totalDocuments: Number(docStats?.totalDocuments ?? 0),
-    totalChunks: Number(chunkStats?.totalChunks ?? 0),
-    totalQuestions: Number(msgStats?.totalQuestions ?? 0),
-    totalSessions: Number(sessionStats?.totalSessions ?? 0),
-    helpfulRate,
-    avgConfidence: Math.round(Number(confStats?.avgConf ?? 0) * 100) / 100,
-    questionsToday: Number(todayStats?.count ?? 0),
-  });
+    res.json({
+      totalDocuments: Number(docStats?.totalDocuments ?? 0),
+      totalChunks: Number(chunkStats?.totalChunks ?? 0),
+      totalQuestions: Number(msgStats?.totalQuestions ?? 0),
+      totalSessions: Number(sessionStats?.totalSessions ?? 0),
+      helpfulRate,
+      avgConfidence: Math.round(Number(confStats?.avgConf ?? 0) * 100) / 100,
+      questionsToday: Number(todayStats?.count ?? 0),
+    });
+  } catch (err) {
+    console.error("Analytics stats query failed:", err);
+    res.json({
+      totalDocuments: 0,
+      totalChunks: 0,
+      totalQuestions: 0,
+      totalSessions: 0,
+      helpfulRate: 0,
+      avgConfidence: 0,
+      questionsToday: 0,
+    });
+  }
 });
 
 // GET /analytics/top-questions
 router.get("/analytics/top-questions", async (_req, res): Promise<void> => {
-  const results = await db
-    .select({
-      question: chatMessagesTable.content,
-      count: count(),
-    })
-    .from(chatMessagesTable)
-    .where(eq(chatMessagesTable.role, "user"))
-    .groupBy(chatMessagesTable.content)
-    .orderBy(sql`count(*) desc`)
-    .limit(10);
+  try {
+    if (!process.env.DATABASE_URL) {
+      const top = await devDb.topQuestionsDev();
+      res.json(top);
+      return;
+    }
+    const results = await db
+      .select({
+        question: chatMessagesTable.content,
+        count: count(),
+      })
+      .from(chatMessagesTable)
+      .where(eq(chatMessagesTable.role, "user"))
+      .groupBy(chatMessagesTable.content)
+      .orderBy(sql`count(*) desc`)
+      .limit(10);
 
-  res.json(results.map((r) => ({ question: r.question, count: Number(r.count) })));
+    res.json(results.map((r) => ({ question: r.question, count: Number(r.count) })));
+  } catch (err) {
+    console.error("Analytics top-questions failed:", err);
+    res.json([]);
+  }
 });
 
 // GET /analytics/suggested-questions
