@@ -33,7 +33,7 @@ The RAG University Assistant streamlines access to university information by:
 ## 🏗️ Architecture
 
 ### Frontend (Vite + React)
-- **Location**: \rtifacts/rag-university/\
+- **Location**: `artifacts/rag-university/`
 - **Framework**: React 18 with TypeScript
 - **Styling**: Tailwind CSS with Shadcn UI components
 - **State Management**: TanStack Query (React Query)
@@ -46,7 +46,7 @@ The RAG University Assistant streamlines access to university information by:
   - Source citations and confidence scoring
 
 ### Backend (Express.js + TypeScript)
-- **Location**: \rtifacts/api-server/\
+- **Location**: `artifacts/api-server/`
 - **Framework**: Express 5 with Node.js
 - **APIs**: RESTful + Server-Sent Events (SSE)
 - **Features**:
@@ -90,12 +90,12 @@ The RAG University Assistant streamlines access to university information by:
 ### Package Management
 - **Monorepo**: PNPM Workspaces
 - **Packages**:
-  - \@workspace/api-server\ - Express API backend
-  - \@workspace/rag-university\ - React UI frontend
-  - \@workspace/api-client-react\ - Generated API client
-  - \@workspace/api-spec\ - OpenAPI specification
-  - \@workspace/api-zod\ - Zod validation schemas
-  - \@workspace/db\ - Database schema and migrations
+  - `@workspace/api-server` - Express API backend
+  - `@workspace/rag-university` - React UI frontend
+  - `@workspace/api-client-react` - Generated API client
+  - `@workspace/api-spec` - OpenAPI specification
+  - `@workspace/api-zod` - Zod validation schemas
+  - `@workspace/db` - Database schema and migrations
 
 ## ✨ Key Features
 
@@ -129,48 +129,9 @@ The RAG University Assistant streamlines access to university information by:
 - No raw markdown artifacts in output
 - Readable font sizing and spacing
 
-## 🚀 Deployment
-
-### Free Tier Options
-
-#### Railway (API Backend)
-- Deploy Node.js Express server
-- Environment variables: \GROQ_API_KEY\, \PORT\
-- Free tier with public HTTPS URL
-- Automatic deployments from GitHub
-
-#### Cloudflare Pages (Frontend)
-- Deploy built React static site
-- Free tier with custom domains
-- Environment variables: \VITE_API_BASE\
-- Automatic builds on push
-
-### Deployment Steps
-
-1. **Push to GitHub**
-   \\\ash
-   git push origin main
-   \\\
-
-2. **Deploy API to Railway**
-   - Connect GitHub repo at railway.app
-   - Set root directory: \rtifacts/api-server\
-   - Build command: \pnpm run build\
-   - Start command: \
-ode --enable-source-maps ./dist/index.mjs\
-   - Add environment variable: \GROQ_API_KEY=your_key_here\
-   - Get public Railway URL
-
-3. **Deploy UI to Cloudflare Pages**
-   - Connect GitHub repo at pages.cloudflare.com
-   - Build command: \pnpm install && pnpm run build\
-   - Build output: \rtifacts/rag-university/dist/public\
-   - Add environment variable: \VITE_API_BASE=https://your-railway-url.railway.app\
-   - Automatic deployments on push
-
 ## 📋 Project Structure
 
-\\\
+```
 RAG-University-Assistant/
 ├── artifacts/
 │   ├── api-server/              # Express backend
@@ -180,7 +141,7 @@ RAG-University-Assistant/
 │   │   │   ├── lib/
 │   │   │   │   ├── groq.ts     # LLM integration
 │   │   │   │   ├── rag.ts      # Semantic search & chunking
-│   │   │   │   ├── logger.ts   # Logging
+│   │   │   │   └── logger.ts   # Logging
 │   │   │   └── routes/
 │   │   │       ├── chat.ts     # Chat endpoint (SSE)
 │   │   │       └── documents.ts # Document management
@@ -210,7 +171,7 @@ RAG-University-Assistant/
 ├── package.json                 # Root workspace config
 ├── pnpm-workspace.yaml          # PNPM monorepo config
 └── tsconfig.base.json           # Base TypeScript config
-\\\
+```
 
 ## 🔐 Security
 
@@ -230,39 +191,39 @@ RAG-University-Assistant/
 ### Local Setup
 
 1. **Install dependencies**
-   \\\ash
+   ```bash
    pnpm install
-   \\\
+   ```
 
 2. **Configure environment**
-   \\\ash
+   ```bash
    cd artifacts/api-server
    cp .env.example .env
    # Add your GROQ_API_KEY to .env
-   \\\
+   ```
 
 3. **Run in development**
    - **Terminal 1 - API Server**
-     \\\ash
+     ```bash
      cd artifacts/api-server
      pnpm run build
      pnpm run start
-     \\\
+     ```
    
    - **Terminal 2 - UI Dev Server**
-     \\\ash
+     ```bash
      cd artifacts/rag-university
      pnpm run dev
-     \\\
+     ```
 
 4. **Open in browser**
-   \\\
+   ```
    http://localhost:5173
-   \\\
+   ```
 
 ### Build for Production
 
-\\\ash
+```bash
 # Build API
 cd artifacts/api-server
 pnpm run build
@@ -272,28 +233,28 @@ cd artifacts/rag-university
 VITE_API_BASE=https://your-api-url pnpm run build
 
 # Output: artifacts/rag-university/dist/public
-\\\
+```
 
 ## 📊 API Endpoints
 
 ### Chat
-- \POST /api/chat/ask\ - Submit question and get streaming response (SSE)
-- \GET /api/chat/sessions\ - List chat sessions
-- \GET /api/chat/history/:sessionId\ - Get conversation history
-- \POST /api/chat/feedback\ - Submit answer feedback
+- `POST /api/chat/ask` - Submit question and get streaming response (SSE)
+- `GET /api/chat/sessions` - List chat sessions
+- `GET /api/chat/history/:sessionId` - Get conversation history
+- `POST /api/chat/feedback` - Submit answer feedback
 
 ### Documents
-- \POST /api/documents\ - Upload document
-- \GET /api/documents\ - List all documents
-- \DELETE /api/documents/:id\ - Delete document
-- \POST /api/documents/rebuild\ - Rebuild search index
+- `POST /api/documents` - Upload document
+- `GET /api/documents` - List all documents
+- `DELETE /api/documents/:id` - Delete document
+- `POST /api/documents/rebuild` - Rebuild search index
 
 ### Analytics
-- \GET /api/analytics/stats\ - Get platform statistics
-- \GET /api/analytics/top-questions\ - Get trending questions
+- `GET /api/analytics/stats` - Get platform statistics
+- `GET /api/analytics/top-questions` - Get trending questions
 
 ### Health
-- \GET /api/healthz\ - Health check endpoint
+- `GET /api/healthz` - Health check endpoint
 
 ## 🎓 Learning Resources
 
@@ -310,9 +271,9 @@ MIT License
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch (\git checkout -b feature/AmazingFeature\)
-3. Commit changes (\git commit -m 'Add AmazingFeature'\)
-4. Push to branch (\git push origin feature/AmazingFeature\)
+2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit changes (`git commit -m 'Add AmazingFeature'`)
+4. Push to branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
 ## 📞 Support
