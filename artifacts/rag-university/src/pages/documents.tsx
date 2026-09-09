@@ -217,7 +217,8 @@ export default function DocumentsPage() {
       formData.append("file", item.file);
 
       try {
-        const res = await fetch(`${import.meta.env.BASE_URL}api/documents`, {
+        const apiBase = ((import.meta.env.VITE_API_BASE as string) || (import.meta.env.VITE_API_BASE_URL as string) || "http://localhost:3001").replace(/\/+$/, "");
+        const res = await fetch(`${apiBase}/api/documents`, {
           method: "POST",
           body: formData,
         });

@@ -11,6 +11,10 @@ export const documentsTable = pgTable("documents", {
   chunkCount: integer("chunk_count").notNull().default(0),
   status: text("status").notNull().default("processing"), // processing | ready | error
   errorMessage: text("error_message"),
+  // Free hosts have ephemeral filesystems, so uploads/ is wiped on redeploy.
+  // Persisting the extracted text lets re-indexing run from the database
+  // instead of the disk, which removes the persistent-disk requirement.
+  extractedText: text("extracted_text"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

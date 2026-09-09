@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { 
   useListChatSessions, 
   useCreateChatSession, 
@@ -10,7 +10,7 @@ import {
   useAskQuestion
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Send, PlusCircle, MessageSquare, Trash2, ThumbsUp, ThumbsDown, FileText, ChevronRight, BookOpen, Library, Download, FileDown } from "lucide-react";
+import { Send, PlusCircle, MessageSquare, Trash2, ThumbsUp, ThumbsDown, FileText, ChevronRight, BookOpen, Library, Download, FileDown, MoreVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
@@ -47,6 +47,10 @@ export default function ChatPage() {
     query: { enabled: !!activeSessionId, queryKey: getGetChatHistoryQueryKey(activeSessionId!) }
   });
 
+  const displayHistory = useMemo(() => {
+    return history ?? [];
+  }, [history]);
+
   // Mutations
   const createSession = useCreateChatSession();
   const deleteSession = useDeleteChatSession();
@@ -57,7 +61,7 @@ export default function ChatPage() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [history, streamingContent]);
+  }, [displayHistory, streamingContent]);
 
   const handleCreateSession = () => {
     createSession.mutate(undefined, {
@@ -76,6 +80,107 @@ export default function ChatPage() {
         queryClient.invalidateQueries({ queryKey: getListChatSessionsQueryKey() });
       }
     });
+  };
+
+  const handleDeleteActiveChat = () => {
+    if (!activeSessionId) return;
+    deleteSession.mutate({ sessionId: activeSessionId }, {
+      onSuccess: () => {
+        setActiveSessionId(null);
+        queryClient.invalidateQueries({ queryKey: getListChatSessionsQueryKey() });
+      }
+    });
+  };
+
+  const renderMessageBody = (role: "user" | "assistant", content: string) => {
+    const clean = String(content || "")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+      .replace(/\*\*/g, "")
+      .replace(/\*/g, "")
+      .replace(/`/g, "")
+      .replace(/\[source\s*\d+\]|\[Sources?\]/gi, "Sources")
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+
+    const lines = clean.split("\n");
+
+    if (role === "assistant") {
+      const output: React.ReactNode[] = [];
+      let index = 0;
+
+      while (index < lines.length) {
+        const line = lines[index];
+        const trimmed = line.trim();
+
+        if (trimmed.includes("|") && trimmed.split("|").length >= 3) {
+          const tableLines: string[] = [];
+          let end = index;
+          while (end < lines.length) {
+            const candidate = lines[end].trim();
+            if (!candidate.includes("|") || candidate.split("|").length < 3) break;
+            tableLines.push(candidate);
+            end += 1;
+          }
+
+          const parsed = tableLines
+            .map((tableLine) => tableLine.replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim()))
+            .filter((row) => row.length >= 2 && !/^(-+:?-+$)|^[-: ]+$/.test(row.join(" ")));
+
+          if (parsed.length >= 2) {
+            const header = parsed[0];
+            const rows = parsed.slice(1);
+            output.push(
+              <table key={`table-${index}`} className="min-w-full border-collapse text-sm my-4 table-auto text-foreground">
+                <thead>
+                  <tr>
+                    {header.map((cell, cellIndex) => (
+                      <th key={cellIndex} className="border border-border bg-muted px-3 py-2 text-center font-black text-foreground align-middle">{cell}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row, rowIndex) => (
+                    <tr key={rowIndex}>
+                      {row.map((cell, cellIndex) => (
+                        <td key={cellIndex} className="border border-border px-3 py-2 align-middle text-center text-foreground">{cell}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            );
+            index = end;
+            continue;
+          }
+        }
+
+        const trimmedLine = line.trim();
+        if (!trimmedLine) {
+          output.push(<div key={`empty-${index}`} className="h-3" />);
+          index += 1;
+          continue;
+        }
+
+        if (index === 0) {
+          output.push(<div key={index} className="text-2xl font-black text-primary leading-tight tracking-tight">{trimmedLine}</div>);
+        } else if (/^Sources:/i.test(trimmedLine)) {
+          output.push(<div key={index} className="mt-4 text-sm font-black text-primary uppercase tracking-wide">{trimmedLine}</div>);
+        } else if (/^\s*•\s*/.test(trimmedLine)) {
+          output.push(<div key={index} className="ml-4 text-sm leading-7">{trimmedLine}</div>);
+        } else {
+          output.push(<div key={index} className="text-sm leading-7">{trimmedLine}</div>);
+        }
+
+        index += 1;
+      }
+
+      return <div className="whitespace-pre-wrap leading-7">{output}</div>;
+    }
+
+    return <span className="whitespace-pre-wrap">{clean}</span>;
   };
 
   const handleSend = async () => {
@@ -104,20 +209,26 @@ export default function ChatPage() {
     setStreamingConfidence(null);
     setLastQuestion(questionText);
 
-    // Optimistically add user message to history
-    if (history) {
-      const tempUserMsg = {
-        id: Date.now(),
-        sessionId: currentSessionId,
-        role: "user" as const,
-        content: questionText,
-        createdAt: new Date().toISOString()
-      };
-      queryClient.setQueryData(getGetChatHistoryQueryKey(currentSessionId), [...history, tempUserMsg]);
-    }
+    // Optimistically put the user message into the same query cache object that
+    // the chat history hook reads, so there is only one source of truth.
+    const tempUserMsg = {
+      id: Date.now(),
+      sessionId: currentSessionId,
+      role: "user" as const,
+      content: questionText,
+      sources: null,
+      confidence: null,
+      feedback: null,
+      createdAt: new Date().toISOString(),
+    };
+
+    const sessionHistoryKey = getGetChatHistoryQueryKey(currentSessionId);
+    const sessionHistory = queryClient.getQueryData<any[]>(sessionHistoryKey) ?? [];
+    queryClient.setQueryData(sessionHistoryKey, [...sessionHistory, tempUserMsg]);
 
     try {
-      const res = await fetch(`${import.meta.env.BASE_URL}api/chat/ask`, {
+      const apiBase = ((import.meta.env.VITE_API_BASE as string) || (import.meta.env.VITE_API_BASE_URL as string) || "http://localhost:3001").replace(/\/+$/, "");
+      const res = await fetch(`${apiBase}/api/chat/ask`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: questionText, sessionId: currentSessionId })
@@ -132,11 +243,11 @@ export default function ChatPage() {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        
+
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop() || "";
-        
+
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             const dataStr = line.slice(6).trim();
@@ -185,7 +296,7 @@ export default function ChatPage() {
   const activeSession = sessions?.find((s) => s.id === activeSessionId);
 
   const handleExportMarkdown = () => {
-    if (!history?.length) return;
+    if (!displayHistory.length) return;
     const title = activeSession?.title ?? "Chat Export";
     const date = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
     const lines: string[] = [
@@ -195,7 +306,7 @@ export default function ChatPage() {
       "---",
       "",
     ];
-    for (const msg of history) {
+    for (const msg of displayHistory) {
       if (msg.role === "user") {
         lines.push(`**You:** ${msg.content}`, "");
       } else {
@@ -225,11 +336,11 @@ export default function ChatPage() {
   };
 
   const handleExportPDF = () => {
-    if (!history?.length) return;
+    if (!displayHistory.length) return;
     const title = activeSession?.title ?? "Chat Export";
     const date = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 
-    const msgHtml = history.map((msg) => {
+    const msgHtml = displayHistory.map((msg) => {
       if (msg.role === "user") {
         return `<div class="msg user"><div class="bubble">${msg.content.replace(/</g, "&lt;")}</div></div>`;
       }
@@ -333,41 +444,47 @@ ${msgHtml}
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col bg-background relative">
         {/* Session toolbar — visible when messages exist */}
-        {activeSessionId && (history?.length ?? 0) > 0 && !isStreaming && (
-          <div className="shrink-0 h-10 border-b border-border flex items-center justify-between px-4 md:px-8 bg-background/80 backdrop-blur-sm">
+        {activeSessionId && displayHistory.length > 0 && !isStreaming && (
+          <div className="shrink-0 h-10 border-b border-border flex items-center px-4 md:px-8 bg-background/80 backdrop-blur-sm">
             <span className="text-xs text-muted-foreground truncate max-w-[60%]">
               {activeSession?.title}
             </span>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground">
-                  <Download className="h-3.5 w-3.5" />
-                  Export
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuLabel className="text-xs">Export conversation</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleExportMarkdown} className="gap-2 cursor-pointer">
-                  <FileDown className="h-4 w-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm font-medium">Markdown (.md)</p>
-                    <p className="text-xs text-muted-foreground">Plain text with formatting</p>
-                  </div>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleExportPDF} className="gap-2 cursor-pointer">
-                  <FileText className="h-4 w-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm font-medium">PDF</p>
-                    <p className="text-xs text-muted-foreground">Print-ready document</p>
-                  </div>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <div className="ml-auto">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground" aria-label="Chat options">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel className="text-xs">Chat Actions</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleExportMarkdown} className="gap-2 cursor-pointer">
+                    <FileDown className="h-4 w-4 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-medium">Export Markdown</p>
+                      <p className="text-xs text-muted-foreground">Plain text with formatting</p>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportPDF} className="gap-2 cursor-pointer">
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-medium">Export PDF</p>
+                      <p className="text-xs text-muted-foreground">Print-ready document</p>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleDeleteActiveChat} className="gap-2 cursor-pointer text-destructive focus:text-destructive">
+                    <Trash2 className="h-4 w-4" />
+                    <span className="text-sm font-medium">Delete Chat</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         )}
         <div className="flex-1 overflow-y-auto p-4 md:p-8" ref={scrollRef}>
-          {!activeSessionId && !history?.length && !isStreaming ? (
+          {!activeSessionId && !displayHistory.length && !isStreaming ? (
             <div className="h-full flex flex-col items-center justify-center max-w-2xl mx-auto text-center space-y-6">
               <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-4">
                 <Library className="h-8 w-8 text-primary" />
@@ -397,7 +514,7 @@ ${msgHtml}
             </div>
           ) : (
             <div className="max-w-4xl mx-auto space-y-8 pb-8">
-              {history?.map((msg) => (
+              {displayHistory.map((msg) => (
                 <div key={msg.id} className={`flex gap-4 ${msg.role === 'assistant' ? '' : 'flex-row-reverse'}`}>
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
                     msg.role === 'assistant' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'
@@ -408,7 +525,7 @@ ${msgHtml}
                     <div className={`prose prose-sm md:prose-base dark:prose-invert max-w-none ${
                       msg.role === 'user' ? 'bg-secondary px-5 py-3 rounded-2xl rounded-tr-sm text-foreground inline-block' : 'text-foreground'
                     }`}>
-                      {msg.content}
+                      {renderMessageBody(msg.role, msg.content)}
                     </div>
                     
                     {msg.role === 'assistant' && (
@@ -487,7 +604,7 @@ ${msgHtml}
                   </div>
                   <div className="flex-1 max-w-[85%]">
                     <div className="prose prose-sm md:prose-base dark:prose-invert max-w-none text-foreground">
-                      {streamingContent || (
+                      {streamingContent ? renderMessageBody("assistant", streamingContent) : (
                         <span className="flex gap-1 py-2">
                           <span className="w-1.5 h-1.5 bg-primary/50 rounded-full animate-bounce"></span>
                           <span className="w-1.5 h-1.5 bg-primary/50 rounded-full animate-bounce [animation-delay:0.2s]"></span>

@@ -11,7 +11,7 @@ import {
   DeleteDocumentParams,
 } from "@workspace/api-zod";
 import { logger } from "../lib/logger";
-import { uploadsDir, ensureUploadsDir, processDocument } from "../lib/rag";
+import { uploadsDir, ensureUploadsDir, processDocument, removeDocumentVectors } from "../lib/rag";
 
 const router: IRouter = Router();
 
@@ -81,7 +81,7 @@ router.post(
       return;
     }
     if (!process.env.DATABASE_URL) {
-      // Create a dev document record and skip background processing
+      // Persist and process locally when PostgreSQL is not configured.
       const d = {
         id: Date.now(),
         filename: req.file.filename,
@@ -92,7 +92,11 @@ router.post(
         status: "processing",
         createdAt: new Date().toISOString(),
       };
+      await devDb.createDocumentDev(d);
       res.status(201).json(d);
+      processDocument(d.id, req.file.path, req.file.mimetype).catch((err) => {
+        req.log.error({ err, documentId: d.id }, "Fallback document processing error");
+      });
       return;
     }
     const [doc] = await db
@@ -207,6 +211,7 @@ router.delete("/documents/:id", async (req, res): Promise<void> => {
         res.status(404).json({ error: "Document not found" });
         return;
       }
+      await removeDocumentVectors(params.data.id);
       res.sendStatus(204);
       return;
     }

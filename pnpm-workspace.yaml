@@ -72,6 +72,7 @@ onlyBuiltDependencies:
   - '@swc/core'
   - esbuild
   - msw
+  - tesseract.js
   - unrs-resolver
 
 overrides:
@@ -158,5 +159,5 @@ overrides:
   esbuild: "0.27.3"
 
 allowBuilds:
-  better-sqlite3: true
   esbuild: false
+  tesseract.js: false

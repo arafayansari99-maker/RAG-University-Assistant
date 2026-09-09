@@ -1,205 +1,272 @@
-// Dev DB with optional file-backed persistence using lowdb
-import { join } from "path";
-import { existsSync } from "fs";
+import fs from "fs/promises";
+import path from "path";
 
-type Session = {
-  id: number;
-  title: string;
-  createdAt: string;
-  lastMessageAt: string | null;
-};
+const workspaceRoot = process.cwd().endsWith(path.join("artifacts", "api-server"))
+  ? path.resolve(process.cwd(), "../..")
+  : process.cwd();
 
-type Message = {
-  id: number;
-  sessionId: number;
-  role: "user" | "assistant";
-  content: string;
-  sources?: any[] | null;
-  confidence?: number | null;
-  createdAt: string;
-  feedback?: string | null;
-};
+const dataDir = path.resolve(workspaceRoot, "artifacts/api-server/.data");
+const dataFile = path.join(dataDir, "dev-db.json");
 
-type Document = {
-  id: number;
-  filename: string;
-  originalName: string;
-  mimeType: string;
-  fileSize: number;
-  chunkCount: number;
-  status: string;
-  createdAt: string;
-};
-
-let state: { sessions: Session[]; messages: Message[]; documents: Document[] } = {
-  sessions: [],
-  messages: [],
+const defaultState = {
+  chatSessions: [],
+  chatMessages: [],
   documents: [],
+  documentChunks: [],
 };
 
-let sessionIdSeq = 1;
-let messageIdSeq = 1;
-let documentIdSeq = 1;
+async function ensureStore(): Promise<void> {
+  await fs.mkdir(dataDir, { recursive: true });
 
-let writeFn: ((s: typeof state) => Promise<void>) | null = null;
-
-async function initPersistence() {
-  const client = (process.env.DB_CLIENT || "memory").toLowerCase();
-  if (client !== "file") return;
   try {
-    const { Low } = await import("lowdb");
-    const { JSONFile } = await import("lowdb/node");
-    const provided = process.env.FILE_DB_PATH || "./.data/devdb.json";
-    const filePath = provided.startsWith("/") ? provided : join(process.cwd(), provided);
-    const adapter = new JSONFile(filePath);
-    const db = new Low(adapter as any);
-    await db.read();
-    db.data = db.data ?? { sessions: [], messages: [], documents: [] };
-    state = db.data as any;
-    // initialize seqs
-    sessionIdSeq = state.sessions.reduce((m, s) => Math.max(m, s.id), 0) + 1;
-    messageIdSeq = state.messages.reduce((m, s) => Math.max(m, s.id), 0) + 1;
-    documentIdSeq = state.documents.reduce((m, s) => Math.max(m, s.id), 0) + 1;
-    const fs = await import("fs/promises");
-    writeFn = async (s) => {
-      // write JSON directly to avoid steno/rename permission issues on Windows
-      await fs.writeFile(filePath, JSON.stringify(s, null, 2));
-    };
-
-    // Ensure directory exists if using file path
-    const { dirname } = await import("path");
-    const dir = dirname(filePath);
-    if (dir && !existsSync(dir)) {
-      const fs = await import("fs/promises");
-      await fs.mkdir(dir, { recursive: true });
-      await writeFn(state);
-    }
-  } catch (e) {
-    console.warn("lowdb not available; falling back to in-memory dev DB", e);
+    await fs.access(dataFile);
+  } catch {
+    await fs.writeFile(dataFile, JSON.stringify(defaultState, null, 2), "utf-8");
   }
 }
 
-// initialize but don't block startup
-initPersistence().catch(() => {});
+async function readStore(): Promise<any> {
+  await ensureStore();
+  const raw = await fs.readFile(dataFile, "utf-8");
 
-function nowIso() {
-  return new Date().toISOString();
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      chatSessions: Array.isArray(parsed.chatSessions) ? parsed.chatSessions : [],
+      chatMessages: Array.isArray(parsed.chatMessages) ? parsed.chatMessages : [],
+      documents: Array.isArray(parsed.documents) ? parsed.documents : [],
+      documentChunks: Array.isArray(parsed.documentChunks) ? parsed.documentChunks : [],
+    };
+  } catch {
+    return { ...defaultState };
+  }
 }
 
-export async function listChatSessions() {
-  const result = state.sessions
-    .slice()
-    .sort((a, b) => {
-      const av = a.lastMessageAt ? Date.parse(a.lastMessageAt) : 0;
-      const bv = b.lastMessageAt ? Date.parse(b.lastMessageAt) : 0;
-      return bv - av;
-    })
-    .map((s) => ({
-      ...s,
-      messageCount: state.messages.filter((m) => m.sessionId === s.id).length,
-    }));
-  return result;
+async function writeStore(state: typeof defaultState): Promise<void> {
+  await ensureStore();
+  await fs.writeFile(dataFile, JSON.stringify(state, null, 2), "utf-8");
 }
 
-export async function createChatSessionDev(title = "New Chat") {
-  const s: Session = {
-    id: sessionIdSeq++,
-    title,
-    createdAt: nowIso(),
-    lastMessageAt: null,
-  };
-  state.sessions.push(s);
-  if (writeFn) await writeFn(state);
-  return { ...s, messageCount: 0 };
+function asIso(value?: string | Date | null): string | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-export async function deleteChatSessionDev(sessionId: number) {
-  const si = state.sessions.findIndex((s) => s.id === sessionId);
-  if (si === -1) return false;
-  state.sessions.splice(si, 1);
-  for (let i = state.messages.length - 1; i >= 0; i--) if (state.messages[i].sessionId === sessionId) state.messages.splice(i, 1);
-  if (writeFn) await writeFn(state);
-  return true;
-}
+const devDb = {
+  async listChatSessions() {
+    const state = await readStore();
+    return state.chatSessions
+      .map((session: any) => ({
+        id: Number(session.id),
+        title: session.title ?? "New Chat",
+        createdAt: asIso(session.createdAt) ?? new Date().toISOString(),
+        lastMessageAt: asIso(session.lastMessageAt),
+        messageCount: state.chatMessages.filter((m: any) => Number(m.sessionId) === Number(session.id)).length,
+      }))
+      .sort((a: any, b: any) => {
+        const left = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : new Date(a.createdAt).getTime();
+        const right = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : new Date(b.createdAt).getTime();
+        return right - left;
+      });
+  },
 
-export async function getChatMessagesDev(sessionId: number) {
-  return state.messages.filter((m) => m.sessionId === sessionId).sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
-}
+  async createChatSessionDev(title: string) {
+    const state = await readStore();
+    const id = Date.now() + Math.floor(Math.random() * 1000);
+    const session = {
+      id,
+      title: title || "New Chat",
+      createdAt: new Date().toISOString(),
+      lastMessageAt: null,
+    };
+    state.chatSessions.push(session);
+    await writeStore(state);
+    return { ...session, messageCount: 0 };
+  },
 
-export async function insertChatMessageDev(payload: { sessionId: number; role: "user" | "assistant"; content: string; sources?: any[] | null; confidence?: number | null; }) {
-  const m: Message = {
-    id: messageIdSeq++,
-    sessionId: payload.sessionId,
-    role: payload.role,
-    content: payload.content,
-    sources: payload.sources ?? null,
-    confidence: payload.confidence ?? null,
-    createdAt: nowIso(),
-    feedback: null,
-  };
-  state.messages.push(m);
-  const s = state.sessions.find((x) => x.id === payload.sessionId);
-  if (s) s.lastMessageAt = m.createdAt;
-  if (writeFn) await writeFn(state);
-  return m;
-}
+  async deleteChatSessionDev(sessionId: number) {
+    const state = await readStore();
+    state.chatSessions = state.chatSessions.filter((s: any) => Number(s.id) !== Number(sessionId));
+    state.chatMessages = state.chatMessages.filter((m: any) => Number(m.sessionId) !== Number(sessionId));
+    await writeStore(state);
+  },
 
-export async function listDocumentsDev() {
-  return state.documents.slice();
-}
+  async getChatMessagesDev(sessionId: number) {
+    const state = await readStore();
+    return state.chatMessages
+      .filter((m: any) => Number(m.sessionId) === Number(sessionId))
+      .sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+      .map((m: any) => ({
+        ...m,
+        id: Number(m.id),
+        sessionId: Number(m.sessionId),
+        sources: m.sources ?? null,
+        confidence: m.confidence ?? null,
+        createdAt: asIso(m.createdAt) ?? new Date().toISOString(),
+      }));
+  },
 
-export async function getDocumentDev(id: number) {
-  const d = state.documents.find((x) => x.id === id);
-  return d ?? null;
-}
+  async insertChatMessageDev(message: {
+    sessionId: number;
+    role: "user" | "assistant";
+    content: string;
+    sources?: any[] | null;
+    confidence?: number | null;
+  }) {
+    const state = await readStore();
+    const id = Date.now() + Math.floor(Math.random() * 1000);
+    const entry = {
+      id,
+      sessionId: Number(message.sessionId),
+      role: message.role,
+      content: message.content,
+      sources: message.sources ?? null,
+      confidence: message.confidence ?? null,
+      feedback: null,
+      createdAt: new Date().toISOString(),
+    };
+    state.chatMessages.push(entry);
 
-export async function getDocumentChunksDev(_id: number) {
-  // File-backed dev-db doesn't extract chunks; return empty list
-  return [];
-}
+    const session = state.chatSessions.find((s: any) => Number(s.id) === Number(message.sessionId));
+    if (session) {
+      session.lastMessageAt = new Date().toISOString();
+      session.title = session.title === "New Chat" && entry.role === "user" ? (entry.content || "New Chat").slice(0, 60) : session.title;
+    }
 
-export async function deleteDocumentDev(id: number) {
-  const idx = state.documents.findIndex((d) => d.id === id);
-  if (idx === -1) return false;
-  state.documents.splice(idx, 1);
-  if (writeFn) await writeFn(state);
-  return true;
-}
+    await writeStore(state);
+    return { ...entry, createdAt: entry.createdAt, sources: entry.sources ?? null };
+  },
 
-export async function analyticsStatsDev() {
-  const totalDocuments = state.documents.length;
-  const totalChunks = 0;
-  const totalQuestions = state.messages.filter((m) => m.role === "user").length;
-  const totalSessions = state.sessions.length;
-  const feedbacks = state.messages.filter((m) => m.role === "assistant" && m.feedback != null);
-  const helpful = feedbacks.filter((f) => f.feedback === "helpful").length;
-  const totalFeedback = feedbacks.length;
-  const helpfulRate = totalFeedback > 0 ? Math.round((helpful / totalFeedback) * 100) / 100 : 0;
-  const confidences = state.messages.filter((m) => m.confidence != null).map((m) => m.confidence ?? 0);
-  const avgConfidence = confidences.length > 0 ? Math.round((confidences.reduce((a, b) => a + b, 0) / confidences.length) * 100) / 100 : 0;
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const questionsToday = state.messages.filter((m) => m.role === "user" && Date.parse(m.createdAt) >= todayStart.getTime()).length;
-  return { totalDocuments, totalChunks, totalQuestions, totalSessions, helpfulRate, avgConfidence, questionsToday };
-}
+  async listDocumentsDev() {
+    const state = await readStore();
+    return state.documents
+      .map((doc: any) => ({
+        ...doc,
+        id: Number(doc.id),
+        chunkCount: Number(doc.chunkCount ?? 0),
+        createdAt: asIso(doc.createdAt) ?? new Date().toISOString(),
+      }))
+      .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  },
 
-export async function topQuestionsDev() {
-  const counts: Record<string, number> = {};
-  for (const m of state.messages) if (m.role === "user") counts[m.content] = (counts[m.content] || 0) + 1;
-  const arr = Object.entries(counts).map(([question, count]) => ({ question, count })).sort((a, b) => b.count - a.count).slice(0, 10);
-  return arr;
-}
+  async createDocumentDev(document: {
+    id: number;
+    filename: string;
+    originalName: string;
+    mimeType: string;
+    fileSize: number;
+    chunkCount: number;
+    status: string;
+    createdAt: string;
+  }) {
+    const state = await readStore();
+    state.documents.push(document);
+    await writeStore(state);
+    return document;
+  },
 
-export default {
-  listChatSessions,
-  createChatSessionDev,
-  deleteChatSessionDev,
-  getChatMessagesDev,
-  insertChatMessageDev,
-  listDocumentsDev,
-  getDocumentDev,
-  getDocumentChunksDev,
-  deleteDocumentDev,
-  analyticsStatsDev,
-  topQuestionsDev,
+  async getDocumentDev(documentId: number) {
+    const state = await readStore();
+    const doc = state.documents.find((d: any) => Number(d.id) === Number(documentId));
+    if (!doc) return null;
+    return {
+      ...doc,
+      id: Number(doc.id),
+      createdAt: asIso(doc.createdAt) ?? new Date().toISOString(),
+      chunkCount: Number(doc.chunkCount ?? 0),
+    };
+  },
+
+  async getDocumentChunksDev(documentId: number) {
+    const state = await readStore();
+    return state.documentChunks
+      .filter((chunk: any) => Number(chunk.documentId) === Number(documentId))
+      .sort((a: any, b: any) => Number(a.chunkIndex ?? 0) - Number(b.chunkIndex ?? 0))
+      .map((chunk: any) => ({
+        ...chunk,
+        id: Number(chunk.id),
+        documentId: Number(chunk.documentId),
+        chunkIndex: Number(chunk.chunkIndex ?? 0),
+        pageNumber: chunk.pageNumber ?? null,
+        createdAt: asIso(chunk.createdAt) ?? new Date().toISOString(),
+      }));
+  },
+
+  async replaceDocumentChunksDev(documentId: number, chunks: Array<{ chunkText: string; pageNumber: number | null }>) {
+    const state = await readStore();
+    state.documentChunks = state.documentChunks.filter((chunk: any) => Number(chunk.documentId) !== Number(documentId));
+    state.documentChunks.push(...chunks.map((chunk, index) => ({
+      id: Date.now() + index,
+      documentId: Number(documentId),
+      chunkText: chunk.chunkText,
+      pageNumber: chunk.pageNumber,
+      chunkIndex: index,
+      createdAt: new Date().toISOString(),
+    })));
+    await writeStore(state);
+  },
+
+  async updateDocumentDev(documentId: number, update: { status: string; chunkCount: number; errorMessage?: string }) {
+    const state = await readStore();
+    const document = state.documents.find((item: any) => Number(item.id) === Number(documentId));
+    if (!document) return;
+    Object.assign(document, update);
+    await writeStore(state);
+  },
+
+  async deleteDocumentDev(documentId: number) {
+    const state = await readStore();
+    const before = state.documents.length;
+    state.documents = state.documents.filter((d: any) => Number(d.id) !== Number(documentId));
+    state.documentChunks = state.documentChunks.filter((c: any) => Number(c.documentId) !== Number(documentId));
+    await writeStore(state);
+    return before !== state.documents.length;
+  },
+
+  async analyticsStatsDev() {
+    const state = await readStore();
+    const totalDocuments = state.documents.length;
+    const totalChunks = state.documentChunks.length;
+    const totalSessions = state.chatSessions.length;
+    const totalQuestions = state.chatMessages.filter((m: any) => m.role === "user").length;
+    const feedbacks = state.chatMessages.filter((m: any) => m.role === "assistant" && m.feedback);
+    const helpful = feedbacks.filter((m: any) => m.feedback === "helpful").length;
+    const helpfulRate = feedbacks.length > 0 ? Number((helpful / feedbacks.length).toFixed(2)) : 0;
+    const avgConfidence =
+      state.chatMessages.filter((m: any) => m.role === "assistant" && typeof m.confidence === "number").reduce((sum: number, m: any) => sum + m.confidence, 0) /
+      Math.max(1, state.chatMessages.filter((m: any) => m.role === "assistant" && typeof m.confidence === "number").length);
+    const questionsToday = state.chatMessages.filter((m: any) => {
+      if (m.role !== "user") return false;
+      const createdAt = new Date(m.createdAt);
+      const now = new Date();
+      return createdAt.toDateString() === now.toDateString();
+    }).length;
+
+    return {
+      totalDocuments,
+      totalChunks,
+      totalQuestions,
+      totalSessions,
+      helpfulRate,
+      avgConfidence: Number.isFinite(avgConfidence) ? Number(avgConfidence.toFixed(2)) : 0,
+      questionsToday,
+    };
+  },
+
+  async topQuestionsDev() {
+    const state = await readStore();
+    const counts: Record<string, number> = {};
+    for (const m of state.chatMessages.filter((m: any) => m.role === "user")) {
+      const question = String(m.content || "").trim();
+      if (!question) continue;
+      counts[question] = (counts[question] ?? 0) + 1;
+    }
+    return Object.entries(counts)
+      .map(([question, count]) => ({ question, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+  },
 };
+
+export default devDb;

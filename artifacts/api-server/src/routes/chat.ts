@@ -11,7 +11,7 @@ import {
   SubmitFeedbackBody,
 } from "@workspace/api-zod";
 import { retrieveChunks } from "../lib/rag";
-import { streamAnswer, calculateConfidence } from "../lib/groq";
+import { streamAnswer, calculateConfidence, formatProfessionalAnswer, validateGeneratedAnswer, fallbackAnswerFromChunks } from "../lib/groq";
 import type { RetrievedChunk } from "../lib/rag";
 
 const router: IRouter = Router();
@@ -232,9 +232,13 @@ router.post("/chat/ask", async (req, res): Promise<void> => {
       res.write(`data: ${JSON.stringify({ content })}\n\n`);
     },
     onDone: async (response) => {
-      fullResponse = response;
+      fullResponse = formatProfessionalAnswer(response);
     },
   });
+
+  if (!validateGeneratedAnswer(fullResponse, question, chunks)) {
+    fullResponse = formatProfessionalAnswer(fallbackAnswerFromChunks(chunks));
+  }
 
   const confidence = calculateConfidence(chunks, fullResponse);
 

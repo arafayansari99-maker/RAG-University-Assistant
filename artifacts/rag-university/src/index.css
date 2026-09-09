@@ -1,10 +1,14 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@400;500;600&display=swap');
+/* Fonts are loaded via <link rel="preconnect"> + <link rel="stylesheet"> in index.html.
+   A remote @import here would block rendering on a CSS-then-font request chain. */
 @import "tailwindcss";
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
 
+/* All color tokens below are bare `H S% L%` triplets consumed as hsl(var(--x)).
+   `@theme inline` is what makes the .dark overrides work: the utility gets the
+   value inlined (hsl(var(--card))) instead of a reference to the theme variable. */
 @theme inline {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -40,6 +44,27 @@
   --color-destructive-foreground: hsl(var(--destructive-foreground));
   --color-destructive-border: var(--destructive-border);
 
+  /* Semantic tokens — defined for BOTH schemes, so pages never need a
+     hardcoded light-only color (bg-green-50, bg-amber-200, bg-slate-50…).
+     Utilities: bg-accent-gold, text-success, border-warning, bg-info/10, … */
+  --color-accent-gold: hsl(var(--accent-gold));
+  --color-accent-gold-foreground: hsl(var(--accent-gold-foreground));
+
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+
+  --color-warning: hsl(var(--warning));
+  --color-warning-foreground: hsl(var(--warning-foreground));
+
+  --color-info: hsl(var(--info));
+  --color-info-foreground: hsl(var(--info-foreground));
+
+  /* Elevation. Raw values live in :root / .dark as --elevation-*; these keys
+     produce the `shadow-card` / `shadow-float` utilities and also emit
+     var(--shadow-card) / var(--shadow-float) for inline styles. */
+  --shadow-card: var(--elevation-card);
+  --shadow-float: var(--elevation-float);
+
   --color-sidebar: hsl(var(--sidebar));
   --color-sidebar-foreground: hsl(var(--sidebar-foreground));
   --color-sidebar-border: hsl(var(--sidebar-border));
@@ -68,19 +93,16 @@
 
   --opaque-button-border-intensity: -8;
 
-  --elevate-1: rgba(0,0,0, .03);
-  --elevate-2: rgba(0,0,0, .08);
-
   /* Academic Theme: Oxford Blue & Crisp White */
   --background: 210 20% 98%;
   --foreground: 222 47% 11%;
-  
+
   --border: 214 32% 91%;
-  
+
   --card: 0 0% 100%;
   --card-foreground: 222 47% 11%;
   --card-border: 214 32% 91%;
-  
+
   --sidebar: 210 20% 98%;
   --sidebar-foreground: 222 47% 11%;
   --sidebar-border: 214 32% 91%;
@@ -89,39 +111,56 @@
   --sidebar-accent: 214 32% 91%;
   --sidebar-accent-foreground: 222 47% 11%;
   --sidebar-ring: 215 50% 23%;
-  
+
   --popover: 0 0% 100%;
   --popover-foreground: 222 47% 11%;
   --popover-border: 214 32% 91%;
-  
+
   --primary: 215 50% 23%; /* Deep Scholarly Blue */
   --primary-foreground: 0 0% 100%;
-  
+
   --secondary: 210 40% 96%;
   --secondary-foreground: 222 47% 11%;
-  
+
   --muted: 210 40% 96%;
   --muted-foreground: 215 16% 47%;
-  
+
   --accent: 210 40% 96%;
   --accent-foreground: 222 47% 11%;
-  
+
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
-  
+
+  /* Semantic — all AA (>=4.5:1) as text on --background, and as
+     *-foreground text on their own solid fill. */
+  --accent-gold: 38 85% 33%;          /* citations, source badges, confidence */
+  --accent-gold-foreground: 0 0% 100%;
+  --success: 142 72% 29%;             /* replaces bg-green-50 / text-green-700 */
+  --success-foreground: 0 0% 100%;
+  --warning: 25 88% 38%;
+  --warning-foreground: 0 0% 100%;
+  --info: 194 80% 32%;
+  --info-foreground: 0 0% 100%;
+
+  --elevation-card: 0 1px 2px 0 hsl(215 25% 27% / 0.06), 0 2px 6px -1px hsl(215 25% 27% / 0.08);
+  --elevation-float: 0 4px 12px -2px hsl(215 25% 27% / 0.10), 0 16px 32px -8px hsl(215 25% 27% / 0.14);
+
   --input: 214 32% 91%;
   --ring: 215 50% 23%;
-  
-  --chart-1: 215 50% 23%;
-  --chart-2: 222 47% 11%;
-  --chart-3: 215 16% 47%;
-  --chart-4: 210 40% 96%;
-  --chart-5: 214 32% 91%;
+
+  --chart-1: 215 50% 30%;
+  --chart-2: 38 85% 40%;
+  --chart-3: 194 70% 35%;
+  --chart-4: 262 45% 48%;
+  --chart-5: 215 16% 47%;
 
   --app-font-sans: 'Inter', sans-serif;
   --app-font-serif: 'Playfair Display', serif;
   --app-font-mono: 'Menlo', monospace;
   --radius: 0.375rem;
+
+  /* iOS home-indicator gap. 0px unless index.html sets viewport-fit=cover. */
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
 
   --sidebar-primary-border: hsl(var(--sidebar-primary));
   --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
@@ -145,54 +184,74 @@
 
   --opaque-button-border-intensity: 9;
 
-  --elevate-1: rgba(255,255,255, .04);
-  --elevate-2: rgba(255,255,255, .09);
-
   --background: 222 47% 11%;
   --foreground: 210 40% 98%;
-  
-  --border: 217 32% 17%;
-  
-  --card: 222 47% 11%;
+
+  --border: 217 32% 20%;
+
+  /* Was 222 47% 11% — identical to --background, so every card was flat.
+     Now 4 L-points lighter, a bigger step than light mode's white-on-98%. */
+  --card: 217 33% 15%;
   --card-foreground: 210 40% 98%;
-  --card-border: 217 32% 17%;
-  
+  --card-border: 217 32% 22%;
+
   --sidebar: 222 47% 11%;
   --sidebar-foreground: 210 40% 98%;
-  --sidebar-border: 217 32% 17%;
-  --sidebar-primary: 210 40% 98%;
+  --sidebar-border: 217 32% 20%;
+  --sidebar-primary: 213 70% 62%;     /* was near-white; brand blue restored */
   --sidebar-primary-foreground: 222 47% 11%;
-  --sidebar-accent: 217 32% 17%;
+  --sidebar-accent: 217 32% 20%;
   --sidebar-accent-foreground: 210 40% 98%;
-  --sidebar-ring: 214 32% 91%;
-  
-  --popover: 222 47% 11%;
+  --sidebar-ring: 213 70% 62%;
+
+  /* Popovers float above cards, so one more step up. */
+  --popover: 217 33% 17%;
   --popover-foreground: 210 40% 98%;
-  --popover-border: 217 32% 17%;
-  
-  --primary: 210 40% 98%;
+  --popover-border: 217 32% 24%;
+
+  /* Was 210 40% 98% — the brand blue became white and "primary" buttons read
+     as plain white. 5.9:1 on --background, 5.9:1 against --primary-foreground. */
+  --primary: 213 70% 62%;
   --primary-foreground: 222 47% 11%;
-  
-  --secondary: 217 32% 17%;
+
+  --secondary: 217 32% 20%;
   --secondary-foreground: 210 40% 98%;
-  
-  --muted: 217 32% 17%;
-  --muted-foreground: 215 20.2% 65.1%;
-  
-  --accent: 217 32% 17%;
+
+  --muted: 217 32% 20%;
+  --muted-foreground: 215 20% 68%;
+
+  --accent: 217 32% 20%;
   --accent-foreground: 210 40% 98%;
-  
-  --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 210 40% 98%;
-  
-  --input: 217 32% 17%;
-  --ring: 214 32% 91%;
-  
-  --chart-1: 210 40% 98%;
-  --chart-2: 215 20.2% 65.1%;
-  --chart-3: 217 32% 17%;
-  --chart-4: 214 32% 91%;
-  --chart-5: 222 47% 11%;
+
+  /* Was 0 62.8% 30.6% — only 1.8:1 against --background, so `text-destructive`
+     error copy was effectively invisible. Now 3.7:1 as text, 4.8:1 under white. */
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+
+  --accent-gold: 38 92% 62%;
+  --accent-gold-foreground: 38 60% 12%;
+  --success: 142 60% 52%;
+  --success-foreground: 142 70% 8%;
+  --warning: 25 92% 62%;
+  --warning-foreground: 25 70% 10%;
+  --info: 192 85% 58%;
+  --info-foreground: 194 70% 10%;
+
+  /* Dark surfaces need darker, wider shadows — Tailwind's black/10 defaults
+     are invisible here. */
+  --elevation-card: 0 1px 2px 0 hsl(222 60% 3% / 0.60), 0 2px 6px -1px hsl(222 60% 3% / 0.45);
+  --elevation-float: 0 4px 12px -2px hsl(222 60% 3% / 0.70), 0 16px 32px -8px hsl(222 60% 3% / 0.55);
+
+  --input: 217 32% 22%;
+  --ring: 213 70% 62%;
+
+  /* Was chart-1 near-white and chart-3/chart-5 at or below --background,
+     i.e. invisible series. Now a five-hue ramp matching the semantic tokens. */
+  --chart-1: 213 70% 62%;
+  --chart-2: 38 92% 62%;
+  --chart-3: 192 75% 55%;
+  --chart-4: 265 70% 70%;
+  --chart-5: 215 20% 68%;
 }
 
 @layer base {
@@ -203,8 +262,33 @@
   body {
     @apply font-sans antialiased bg-background text-foreground;
   }
-  
+
   h1, h2, h3, h4, h5, h6 {
     @apply font-serif;
+  }
+}
+
+/* Unlayered on purpose: must beat Tailwind utilities such as `text-sm`.
+   iOS Safari zooms the whole page when a focused control's font-size < 16px. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* Honor the OS setting app-wide. Near-zero rather than `none` so that
+   animationend / transitionend listeners (Radix, tw-animate-css) still fire.
+   framer-motion animates via JS and is handled separately by the
+   <MotionConfig reducedMotion="user"> in components/layout.tsx. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

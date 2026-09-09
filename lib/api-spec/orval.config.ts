@@ -56,6 +56,13 @@ export default defineConfig({
       clean: true,
       prettier: true,
       override: {
+        // The API server validates uploads with multer (`req.file`), never a DOM
+        // `File`, so the zod target skips the multipart body: `contentType` drops
+        // its TypeScript type, `operations` drops its validator.
+        contentType: { exclude: ["multipart/form-data"] },
+        operations: {
+          uploadDocument: { zod: { generate: { body: false } } },
+        },
         zod: {
           coerce: {
             query: ['boolean', 'number', 'string'],

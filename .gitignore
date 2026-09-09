@@ -50,3 +50,7 @@ Thumbs.db
 
 # Local env files
 .env
+
+# Local dev scratch dirs (ephemeral on every host anyway)
+artifacts/api-server/.data/
+artifacts/api-server/uploads/

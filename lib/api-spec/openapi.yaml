@@ -43,6 +43,44 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Document"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+    post:
+      operationId: uploadDocument
+      tags: [documents]
+      summary: Upload a document for indexing
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Document accepted and queued for indexing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
 
   /documents/{id}:
     get:
@@ -63,11 +101,17 @@ paths:
               schema:
                 $ref: "#/components/schemas/Document"
         "404":
-          description: Not found
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
     delete:
       operationId: deleteDocument
       tags: [documents]
       summary: Delete a document
+      security:
+        - bearerAuth: []
       parameters:
         - name: id
           in: path
@@ -77,8 +121,14 @@ paths:
       responses:
         "204":
           description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "404":
-          description: Not found
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
 
   /documents/{id}/chunks:
     get:
@@ -101,13 +151,19 @@ paths:
                 items:
                   $ref: "#/components/schemas/DocumentChunk"
         "404":
-          description: Not found
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
 
   /documents/rebuild-index:
     post:
       operationId: rebuildIndex
       tags: [documents]
       summary: Rebuild the search index for all documents
+      security:
+        - bearerAuth: []
       responses:
         "200":
           description: Index rebuilt
@@ -115,6 +171,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RebuildResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
 
   /chat/sessions:
     get:
@@ -130,6 +192,10 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ChatSession"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
     post:
       operationId: createChatSession
       tags: [chat]
@@ -141,6 +207,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ChatSession"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
 
   /chat/sessions/{sessionId}:
     delete:
@@ -156,6 +226,10 @@ paths:
       responses:
         "204":
           description: Deleted
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
 
   /chat/sessions/{sessionId}/messages:
     get:
@@ -177,12 +251,28 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ChatMessage"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
 
   /chat/ask:
     post:
       operationId: askQuestion
       tags: [chat]
       summary: Ask a question (streaming SSE response)
+      description: |
+        Answers are streamed as Server-Sent Events, so this operation cannot be
+        consumed by React Query; the SPA hand-writes a `fetch` reader for it.
+        The frame contract is:
+
+        ```
+        data: {"sessionId": 12}                                    // first frame, only when a session was created
+        data: {"content": "..."}                                   // repeated, one per token batch
+        data: {"done":true,"messageId":34,"sources":[...],"confidence":0.82,"sessionId":12}
+        data: {"error":"human-readable message"}                   // terminal on failure - ALWAYS sent
+        :                                                          // heartbeat comment every 15s
+        ```
       requestBody:
         required: true
         content:
@@ -191,9 +281,17 @@ paths:
               $ref: "#/components/schemas/QuestionInput"
       responses:
         "200":
-          description: Streaming SSE answer with citations
+          description: Event stream of answer tokens, ending in a `done` or `error` frame
+          content:
+            text/event-stream:
+              schema:
+                type: string
         "400":
-          description: Bad request
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
 
   /chat/messages/{messageId}/feedback:
     post:
@@ -219,12 +317,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ChatMessage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
 
   /analytics/stats:
     get:
       operationId: getAnalyticsStats
       tags: [analytics]
       summary: Get overall analytics stats
+      security:
+        - bearerAuth: []
       responses:
         "200":
           description: Stats
@@ -232,12 +340,43 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AnalyticsStats"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /analytics/activity:
+    get:
+      operationId: getActivity
+      tags: [analytics]
+      summary: Get question volume per day for the last 14 days
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Daily question counts, oldest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityPoint"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
 
   /analytics/top-questions:
     get:
       operationId: getTopQuestions
       tags: [analytics]
       summary: Get most asked questions
+      security:
+        - bearerAuth: []
       responses:
         "200":
           description: Top questions
@@ -247,6 +386,12 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/TopQuestion"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
 
   /analytics/suggested-questions:
     get:
@@ -262,9 +407,64 @@ paths:
                 type: array
                 items:
                   type: string
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/ServerError"
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Shared admin token from `ADMIN_TOKEN`
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Missing or invalid admin token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    PayloadTooLarge:
+      description: File exceeds the 20 MB upload limit
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    ServerError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
   schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
     HealthStatus:
       type: object
       required: [status]
@@ -395,7 +595,16 @@ components:
 
     AnalyticsStats:
       type: object
-      required: [totalDocuments, totalChunks, totalQuestions, totalSessions, helpfulRate, avgConfidence]
+      required:
+        [
+          totalDocuments,
+          totalChunks,
+          totalQuestions,
+          totalSessions,
+          helpfulRate,
+          avgConfidence,
+          documentsByStatus,
+        ]
       properties:
         totalDocuments:
           type: integer
@@ -410,6 +619,25 @@ components:
         avgConfidence:
           type: number
         questionsToday:
+          type: integer
+        documentsByStatus:
+          type: object
+          required: [processing, ready, error]
+          properties:
+            processing:
+              type: integer
+            ready:
+              type: integer
+            error:
+              type: integer
+
+    ActivityPoint:
+      type: object
+      required: [date, questions]
+      properties:
+        date:
+          type: string
+        questions:
           type: integer
 
     TopQuestion:
