@@ -1,5 +1,8 @@
 modules = ["nodejs-24"]
 
+# Run the API server for Replit deployment
+run = "cd artifacts/api-server && pnpm install && pnpm run build && pnpm run start"
+
 [deployment]
 router = "application"
 deploymentTarget = "autoscale"
