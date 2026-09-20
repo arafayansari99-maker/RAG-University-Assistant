@@ -1,18 +1,6 @@
 {
-  "buildCommand": "cd artifacts/rag-university && pnpm install && pnpm run build",
+  "framework": "vite",
+  "buildCommand": "pnpm --filter @workspace/rag-university run build",
   "outputDirectory": "artifacts/rag-university/dist/public",
-  "installCommand": "pnpm install",
-  "env": {
-    "VITE_API_BASE": {
-      "description": "API base URL for frontend to call backend",
-      "default": "http://localhost:3001"
-    }
-  },
-  "regions": ["iad", "sfo", "lhr"],
-  "functions": {
-    "api/**": {
-      "memory": 3008,
-      "maxDuration": 60
-    }
-  }
+  "installCommand": "pnpm install --frozen-lockfile"
 }

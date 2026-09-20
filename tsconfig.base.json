@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "strict": true,
     "incremental": true,
     "isolatedModules": true,
     "lib": ["es2022"],
@@ -16,6 +17,7 @@
     "strictFunctionTypes": false,
     "strictBindCallApply": true,
     "strictPropertyInitialization": true,
+    "forceConsistentCasingInFileNames": true,
     "useUnknownInCatchVariables": true,
     "alwaysStrict": true,
     "skipLibCheck": true,

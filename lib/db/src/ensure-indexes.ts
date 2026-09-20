@@ -6,6 +6,8 @@ import { db } from "./index";
 // neither a generated column nor migration tooling to keep it in sync.
 // Retrieval must call to_tsvector('english', chunk_text) verbatim to hit it.
 export async function ensureIndexes(): Promise<void> {
+  if (!db) return;
+
   await db.execute(
     sql`CREATE INDEX IF NOT EXISTS idx_chunks_fts ON document_chunks USING GIN (to_tsvector('english', chunk_text))`,
   );

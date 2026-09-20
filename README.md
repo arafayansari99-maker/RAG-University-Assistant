@@ -45,9 +45,10 @@ The RAG University Assistant streamlines access to university information by:
   - Professional table rendering for structured data
   - Source citations and confidence scoring
 
-### Backend (Express.js + TypeScript)
-- **Location**: `artifacts/api-server/`
-- **Framework**: Express 5 with Node.js
+### Backend (FastAPI + Python)
+- **Location**: `artifacts/api-fastapi/`
+- **Framework**: FastAPI with Uvicorn
+- **Database**: Supabase PostgreSQL through psycopg
 - **APIs**: RESTful + Server-Sent Events (SSE)
 - **Features**:
   - Document processing (PDF, DOCX, TXT)
@@ -76,21 +77,18 @@ The RAG University Assistant streamlines access to university information by:
 - **Theme**: next-themes (Dark Mode)
 
 ### Backend
-- **Runtime**: Node.js
-- **Framework**: Express 5
-- **Language**: TypeScript
-- **Database**: Drizzle ORM + PostgreSQL
-- **AI**: Groq LLM (openai/gpt-oss-20b)
-- **PDF**: pdf-parse + pdfjs-dist
-- **OCR**: Tesseract.js
-- **DOCX**: Mammoth
-- **Logging**: Pino
-- **Build**: esbuild
+- **Runtime**: Python 3.12+
+- **Framework**: FastAPI + Uvicorn
+- **Database**: Supabase PostgreSQL + psycopg
+- **AI**: Groq Python SDK (openai/gpt-oss-20b)
+- **PDF**: pypdf
+- **DOCX**: python-docx
+- **Validation**: Pydantic
 
 ### Package Management
 - **Monorepo**: PNPM Workspaces
 - **Packages**:
-  - `@workspace/api-server` - Express API backend
+   - `artifacts/api-fastapi` - FastAPI backend
   - `@workspace/rag-university` - React UI frontend
   - `@workspace/api-client-react` - Generated API client
   - `@workspace/api-spec` - OpenAPI specification
@@ -134,7 +132,12 @@ The RAG University Assistant streamlines access to university information by:
 ```
 RAG-University-Assistant/
 ├── artifacts/
-│   ├── api-server/              # Express backend
+│   ├── api-fastapi/             # FastAPI backend
+│   │   ├── api/index.py         # Vercel Python entrypoint
+│   │   ├── app/main.py          # FastAPI routes and SSE chat
+│   │   └── requirements.txt     # Python dependencies
+│   │
+│   ├── api-server/              # Legacy Express backend
 │   │   ├── src/
 │   │   │   ├── app.ts          # Express app setup
 │   │   │   ├── index.ts        # Server entry point
@@ -197,17 +200,17 @@ RAG-University-Assistant/
 
 2. **Configure environment**
    ```bash
-   cd artifacts/api-server
-   cp .env.example .env
-   # Add your GROQ_API_KEY to .env
+   cd artifacts/api-fastapi
+   python -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+   pip install -r requirements.txt
    ```
 
 3. **Run in development**
-   - **Terminal 1 - API Server**
+    - **Terminal 1 - FastAPI Server**
      ```bash
-     cd artifacts/api-server
-     pnpm run build
-     pnpm run start
+       cd artifacts/api-fastapi
+       uvicorn app.main:app --reload --port 8000
      ```
    
    - **Terminal 2 - UI Dev Server**
@@ -225,8 +228,8 @@ RAG-University-Assistant/
 
 ```bash
 # Build API
-cd artifacts/api-server
-pnpm run build
+cd artifacts/api-fastapi
+pip install -r requirements.txt
 
 # Build UI
 cd artifacts/rag-university
@@ -266,6 +269,7 @@ VITE_API_BASE=https://your-api-url pnpm run build
 
 ## 📚 Project Documentation
 
+- [FastAPI + Supabase + Vercel deployment guide](docs/DEPLOYMENT_FASTAPI_SUPABASE_VERCEL.md)
 - [Future add-ons roadmap](docs/FUTURE_ADDONS.md)
 - [Vercel + Fly.io deployment guide](docs/DEPLOYMENT_VERCEL_FLY.md)
 - [Vercel + Replit deployment guide](docs/DEPLOYMENT_VERCEL_REPLIT.md)

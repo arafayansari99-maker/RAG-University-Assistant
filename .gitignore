@@ -10,6 +10,8 @@ out-tsc
 
 # dependencies
 node_modules
+__pycache__/
+*.py[cod]
 
 # IDEs and editors
 /.idea
@@ -50,6 +52,7 @@ Thumbs.db
 
 # Local env files
 .env
+artifacts/rag-university/.env.local
 
 # Local dev scratch dirs (ephemeral on every host anyway)
 artifacts/api-server/.data/
