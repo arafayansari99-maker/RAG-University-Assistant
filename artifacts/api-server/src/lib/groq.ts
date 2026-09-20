@@ -1,4 +1,5 @@
 import Groq from "groq-sdk";
+import { createHash } from "node:crypto";
 import { logger } from "./logger";
 import type { RetrievedChunk } from "./rag";
 
@@ -26,6 +27,11 @@ if (!process.env.GROQ_API_KEY) {
 export const groq = groqClient;
 
 export const GROQ_MODEL = "openai/gpt-oss-20b";
+export const GROQ_MAX_TOKENS = 1024;
+
+function fingerprint(value: string): string {
+  return createHash("sha256").update(value).digest("hex").slice(0, 16);
+}
 
 export function fallbackAnswerFromChunks(chunks: RetrievedChunk[]): string {
   return chunks.length > 0
@@ -254,11 +260,31 @@ export async function streamAnswer(opts: StreamChatOptions): Promise<void> {
     { role: "user", content: buildUserPrompt(question, chunks) },
   ];
 
+  logger.info(
+    {
+      model: GROQ_MODEL,
+      maxTokens: GROQ_MAX_TOKENS,
+      stream: true,
+      messageCount: messages.length,
+      messageRoles: messages.map((message) => message.role),
+      historyMessageCount: Math.min(conversationHistory.length, 6),
+      retrievedChunkCount: chunks.length,
+      questionFingerprint: fingerprint(question),
+      systemPromptFingerprint: fingerprint(String(messages[0]?.content ?? "")),
+      userPromptFingerprint: fingerprint(String(messages[messages.length - 1]?.content ?? "")),
+      totalPromptCharacters: messages.reduce(
+        (total, message) => total + String(message.content ?? "").length,
+        0
+      ),
+    },
+    "Prepared Groq request",
+  );
+
   try {
     const stream = await groq.chat.completions.create({
       model: GROQ_MODEL,
       messages,
-      max_tokens: 1024,
+      max_tokens: GROQ_MAX_TOKENS,
       stream: true,
     });
 

@@ -264,6 +264,14 @@ VITE_API_BASE=https://your-api-url pnpm run build
 - **Monorepo Architecture**: PNPM workspaces for scalable multi-package projects
 - **Table Rendering**: Smart HTML table generation from markdown/pipe-delimited data
 
+## 📚 Project Documentation
+
+- [Future add-ons roadmap](docs/FUTURE_ADDONS.md)
+- [Vercel + Fly.io deployment guide](docs/DEPLOYMENT_VERCEL_FLY.md)
+- [Vercel + Replit deployment guide](docs/DEPLOYMENT_VERCEL_REPLIT.md)
+- [Deployment quick start](docs/DEPLOYMENT_QUICK_START.md)
+- [Vercel + Replit quick start](docs/DEPLOYMENT_VERCEL_REPLIT_QUICK.md)
+
 ## 📝 License
 
 MIT License
