@@ -6,13 +6,14 @@ import {
   useAskQuestion
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Send, Trash2, ThumbsUp, ThumbsDown, FileText, ChevronRight, Library, Download, FileDown, MoreVertical } from "lucide-react";
+import { Send, Trash2, ThumbsUp, ThumbsDown, FileText, ChevronRight, Library, Download, FileDown, MoreVertical, Mic, MicOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import CitationDrawer from "@/components/citation-drawer";
+import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { useChatHistoryNavigation } from "@/components/layout";
@@ -22,6 +23,33 @@ interface Citation {
   pageNumber: number | null;
   chunkText: string;
   score: number;
+}
+
+interface SpeechRecognitionEventLike extends Event {
+  results: {
+    [index: number]: { [index: number]: { transcript: string } };
+    length: number;
+  };
+}
+
+interface SpeechRecognitionLike extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start: () => void;
+  stop: () => void;
+  onend: (() => void) | null;
+  onerror: ((event: Event) => void) | null;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+}
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+
+declare global {
+  interface Window {
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  }
 }
 
 export default function ChatPage() {
@@ -38,7 +66,56 @@ export default function ChatPage() {
   const [activeCitationIndex, setActiveCitationIndex] = useState(0);
   const [lastQuestion, setLastQuestion] = useState("");
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
+  const [isListening, setIsListening] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const speechRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
+
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
+    setSpeechSupported(Boolean(SpeechRecognition));
+    if (!SpeechRecognition) return;
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = "en-US";
+    recognition.onresult = (event) => {
+      const transcript = Array.from({ length: event.results.length }, (_, index) => event.results[index][0].transcript).join(" ").trim();
+      if (transcript) setInput((current) => `${current}${current.trim() ? " " : ""}${transcript}`);
+    };
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = () => {
+      setIsListening(false);
+      toast({ title: "Voice input unavailable", description: "Check microphone permission and try again.", variant: "destructive" });
+    };
+    speechRecognitionRef.current = recognition;
+
+    return () => {
+      recognition.stop();
+      speechRecognitionRef.current = null;
+    };
+  }, []);
+
+  const toggleSpeechInput = () => {
+    const recognition = speechRecognitionRef.current;
+    if (!recognition) {
+      toast({ title: "Voice input is not supported", description: "Try Chrome or Edge for speech-to-text support." });
+      return;
+    }
+    if (isListening) {
+      recognition.stop();
+      setIsListening(false);
+      return;
+    }
+    try {
+      recognition.start();
+      setIsListening(true);
+    } catch {
+      setIsListening(false);
+      toast({ title: "Could not start voice input", description: "Check microphone permission and try again.", variant: "destructive" });
+    }
+  };
 
   // Queries
   const { data: history, isLoading: historyLoading } = useGetChatHistory(activeSessionId!, {
@@ -618,10 +695,22 @@ ${msgHtml}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Ask about university policies, rules, or courses..."
-              className="min-h-[60px] max-h-[200px] w-full resize-none border-0 focus-visible:ring-0 rounded-none bg-transparent py-4 pl-4 pr-14 text-base"
+              className="min-h-[60px] max-h-[200px] w-full resize-none border-0 focus-visible:ring-0 rounded-none bg-transparent py-4 pl-4 pr-24 text-base"
               rows={1}
             />
-            <div className="absolute right-2 bottom-2">
+            <div className="absolute right-2 bottom-2 flex items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={toggleSpeechInput}
+                disabled={isStreaming}
+                title={isListening ? "Stop voice input" : speechSupported ? "Use voice input" : "Voice input unavailable"}
+                aria-label={isListening ? "Stop voice input" : "Use voice input"}
+                className={cn("h-10 w-10 rounded-lg", isListening ? "bg-destructive/10 text-destructive hover:bg-destructive/20" : "text-muted-foreground hover:text-foreground")}
+              >
+                {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+              </Button>
               <Button 
                 size="icon" 
                 onClick={handleSend} 
