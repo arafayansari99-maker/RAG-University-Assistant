@@ -10,6 +10,8 @@ Supabase:        PostgreSQL database
 
 The FastAPI backend preserves the existing frontend API paths and SSE chat response contract.
 
+Vercel serverless functions have platform request-size and execution limits. Keep uploaded PDFs comfortably below the current Vercel limit; larger institutional files need direct object storage or a persistent API host.
+
 ## 1. Prepare Supabase
 
 1. Create a project at [supabase.com](https://supabase.com).
@@ -87,6 +89,8 @@ The frontend project uses:
 5. Confirm streamed SSE content appears.
 6. Confirm citations and confidence appear with the final answer.
 7. Refresh the page and confirm chat history is stored in Supabase.
+
+If the API project root shows `Not Found`, test `/` or `/api/healthz`. The API project must use `artifacts/api-fastapi` as its Vercel Root Directory. The frontend's `VITE_API_BASE` must be the API origin, such as `https://your-api-project.vercel.app`, without a trailing `/api` path.
 
 ## API compatibility
 

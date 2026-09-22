@@ -154,7 +154,7 @@ Required answer style for this project:
 - Write a short, professional academic answer in plain paragraphs.
 - Use a single clear heading only when the question asks for a requirement list, programme summary, or policy explanation.
 - The heading must be plain text, not markdown bold, and must be visually separated from the answer body.
-- Use clean nested bullet points only when the question requires a requirement list or comparison.
+- Use the bullet symbol • or numbered lists only; never start a list item with a hyphen.
 - Restrict the use of markdown symbols. Do not output raw markdown tables, HTML, <br>, pipe-delimited tables, asterisks for headings, or special characters.
 - Do not include developer notes, formatting artifacts, or placeholders.
 - Use a proper heading for the answer, then a paragraph, then a bullet list if needed.

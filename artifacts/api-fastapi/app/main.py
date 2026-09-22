@@ -42,6 +42,11 @@ def shutdown() -> None:
     close_pool()
 
 
+@app.get("/")
+def root() -> dict[str, str]:
+    return {"message": "RAG University Assistant API", "health": "/api/healthz"}
+
+
 class AskQuestion(BaseModel):
     question: str = Field(min_length=1)
     sessionId: int | None = None
@@ -116,22 +121,87 @@ def chunk_text(text: str, page: int | None) -> list[tuple[int | None, str]]:
     return [(page, " ".join(words[start : start + size])) for start in range(0, len(words), step)]
 
 
+def suggested_questions(text: str, filename: str) -> list[str]:
+    clean_text = re.sub(r"\s+", " ", text.replace("\x00", " ")).strip()
+    headings = [
+        line.strip(" -:#")
+        for line in text.splitlines()
+        if 3 <= len(line.strip()) <= 90
+        and not line.strip().endswith((".", ",", ";"))
+        and len(line.split()) <= 12
+    ]
+    topics: list[str] = []
+    for topic in headings + re.findall(r"[A-Z][A-Za-z0-9 &'/-]{3,90}", clean_text):
+        normalized = re.sub(r"\s+", " ", topic).strip()
+        if normalized and normalized.lower() not in {item.lower() for item in topics}:
+            topics.append(normalized)
+    if not topics:
+        sentences = re.split(r"(?<=[.!?])\s+", clean_text)
+        topics = [sentence[:100].strip(" .") for sentence in sentences if len(sentence.split()) >= 5]
+    stem = re.sub(r"[_-]+", " ", filename.rsplit(".", 1)[0]).strip() or "this document"
+    templates = [
+        "What are the key concepts covered in {topic}?",
+        "What requirements or rules are described for {topic}?",
+        "How does the document explain {topic}?",
+        "What practical examples or steps are provided for {topic}?",
+    ]
+    questions = [template.format(topic=topic) for template, topic in zip(templates, topics[:4])]
+    while len(questions) < 4:
+        questions.append(f"What should I know about {stem}?")
+    return list(dict.fromkeys(questions))[:4]
+
+
+def is_confirmation(question: str) -> bool:
+    return bool(re.match(r"^(yes|sure|okay|ok|please|do it|go ahead|that would be helpful)\b", question.strip(), re.I))
+
+
+def follow_up_query(history: list[dict[str, Any]]) -> str | None:
+    for row in reversed(history):
+        if row["role"] != "assistant":
+            continue
+        match = re.search(r"Follow-up:\s*(?:Would you like to know\s+)?(.+?)(?:\?|$)", row["content"], re.I)
+        if match:
+            return match.group(1).strip()
+    return None
+
+
+def retrieval_terms(question: str) -> list[str]:
+    stop_words = {
+        "what", "which", "where", "when", "who", "why", "how", "does", "do", "are", "is",
+        "the", "a", "an", "in", "on", "of", "for", "to", "and", "or", "about", "from",
+        "with", "this", "that", "these", "those", "document", "documents", "covered", "described",
+        "provided", "explain", "practical", "examples", "steps", "key", "concepts", "requirements",
+        "rules", "information", "please", "can", "could", "would", "tell", "me",
+    }
+    return list(dict.fromkeys(
+        term for term in re.findall(r"[a-zA-Z][a-zA-Z0-9'-]{2,}", question.lower())
+        if term not in stop_words
+    ))[:12]
+
+
 def retrieve(question: str, limit: int = 5) -> list[dict[str, Any]]:
+    terms = retrieval_terms(question)
+    term_patterns = [f"%{term}%" for term in terms]
+    term_conditions = " OR ".join(["c.chunk_text ILIKE %s"] * len(term_patterns)) or "FALSE"
+    query_params: list[Any] = [question, f"%{question}%", *term_patterns, question, f"%{question}%", *term_patterns, limit]
     with connection() as conn:
         rows = conn.execute(
-            """
+            f"""
             SELECT c.id, c.document_id, c.chunk_text, c.page_number, c.chunk_index,
                    d.original_name AS document_name,
-                   ts_rank(to_tsvector('english', c.chunk_text), plainto_tsquery('english', %s)) AS rank
+                   ts_rank(to_tsvector('english', c.chunk_text), plainto_tsquery('english', %s))
+                     + CASE WHEN c.chunk_text ILIKE %s THEN 2 ELSE 0 END
+                     + CASE WHEN ({term_conditions}) THEN 0.5 ELSE 0 END AS rank
             FROM document_chunks c
             JOIN documents d ON d.id = c.document_id
             WHERE d.status = 'ready'
               AND (to_tsvector('english', c.chunk_text) @@ plainto_tsquery('english', %s)
-                   OR c.chunk_text ILIKE %s)
+                   OR c.chunk_text ILIKE %s
+                   OR ({term_conditions}))
             ORDER BY rank DESC, c.id ASC
             LIMIT %s
             """,
-            (question, question, f"%{question}%", limit),
+            query_params,
         ).fetchall()
     return [
         {
@@ -149,20 +219,28 @@ def system_prompt() -> str:
         "You are Athena RAG, a university knowledge assistant. "
         "Answer using ONLY the retrieved university document context. "
         "Never invent requirements, policies, page numbers, or sources. "
-        "Use concise professional academic prose, clean bullets when useful, "
-        "and finish with a Sources section. If context is insufficient, say: "
+        "Use concise professional academic prose, clean bullets when useful. "
+        "Use the bullet symbol • or numbered lists; never start a list item with a hyphen. "
+        "finish with a Sources section, and end with exactly one line in this format: "
+        "Follow-up: Would you like to know [one relevant next topic] as well? "
+        "If the user replies with an affirmative confirmation, answer the topic from the previous Follow-up line. "
+        "If context is insufficient, say: "
         'I couldn\'t find enough information in the university documents to answer confidently.'
     )
 
 
-def user_prompt(question: str, chunks: list[dict[str, Any]]) -> str:
+def user_prompt(question: str, chunks: list[dict[str, Any]], confirmation: bool = False) -> str:
     if not chunks:
-        return f"Question: {question}\n\nContext: No relevant documents found."
+        context = "No relevant documents found."
+        if confirmation:
+            context += " Use the previous conversation's accepted Follow-up topic to answer."
+        return f"Question: {question}\n\nContext: {context}"
     context = "\n\n---\n\n".join(
         f"[Source {index}: {item['documentName']}, Page {item['pageNumber']}]\n{item['chunkText']}"
         for index, item in enumerate(chunks, 1)
     )
-    return f"Question: {question}\n\nContext from university documents:\n{context}\n\nAnswer using only this context and list the sources used."
+    continuation = " The user accepted the previous Follow-up; answer that topic directly." if confirmation else ""
+    return f"Question: {question}\n\nContext from university documents:\n{context}\n\nAnswer using only this context and list the sources used.{continuation}"
 
 
 def fallback(chunks: list[dict[str, Any]]) -> str:
@@ -173,6 +251,10 @@ def fallback(chunks: list[dict[str, Any]]) -> str:
         for index, item in enumerate(chunks[:3], 1)
     )
     return f"I found relevant context in the uploaded university documents, but the language model is unavailable.\n\nSources:\n{sources}"
+
+
+def normalize_answer(answer: str) -> str:
+    return re.sub(r"(?m)^\s*[-*]\s+", "  • ", answer).strip()
 
 
 def confidence(chunks: list[dict[str, Any]], answer: str) -> float:
@@ -250,7 +332,9 @@ def ask(request: AskQuestion) -> StreamingResponse:
             (session_id,),
         ).fetchall()
 
-    chunks = retrieve(question)
+    confirmation = is_confirmation(question)
+    retrieval_question = follow_up_query(history) if confirmation else question
+    chunks = retrieve(retrieval_question or question)
     citations = [
         {**item, "chunkText": item["chunkText"][:300], "score": round(item["score"], 2)}
         for item in chunks
@@ -266,7 +350,7 @@ def ask(request: AskQuestion) -> StreamingResponse:
                 client = Groq(api_key=api_key)
                 messages = [{"role": "system", "content": system_prompt()}]
                 messages.extend({"role": row["role"], "content": row["content"]} for row in history[-6:])
-                messages.append({"role": "user", "content": user_prompt(question, chunks)})
+                messages.append({"role": "user", "content": user_prompt(question, chunks, confirmation)})
                 response = client.chat.completions.create(
                     model=os.getenv("GROQ_MODEL", "openai/gpt-oss-20b"),
                     messages=messages,
@@ -282,7 +366,7 @@ def ask(request: AskQuestion) -> StreamingResponse:
                 answer = fallback(chunks)
                 yield sse({"content": answer})
 
-            answer = answer.strip() or fallback(chunks)
+            answer = normalize_answer(answer) or fallback(chunks)
             score = confidence(chunks, answer)
             with connection() as conn:
                 saved = conn.execute(
@@ -326,7 +410,14 @@ def feedback(message_id: int, request: Feedback) -> dict[str, Any]:
 @app.get("/api/documents")
 def list_documents() -> list[dict[str, Any]]:
     with connection() as conn:
-        rows = conn.execute("SELECT * FROM documents ORDER BY created_at DESC").fetchall()
+        rows = conn.execute(
+            """
+            SELECT id, filename, original_name, mime_type, file_size,
+                   chunk_count, status, error_message, created_at
+            FROM documents
+            ORDER BY created_at DESC
+            """
+        ).fetchall()
     return [document_record(row) for row in rows]
 
 
@@ -339,7 +430,8 @@ def upload_document(file: UploadFile = File(...)) -> dict[str, Any]:
     try:
         pages = extract_document(filename, data)
         chunks = [item for page, text in pages for item in chunk_text(text, page)]
-        extracted = "\n\n".join(text for _, text in pages)
+        extracted = "\n\n".join(text.replace("\x00", " ") for _, text in pages)
+        questions = suggested_questions(extracted, filename)
         with connection() as conn:
             row = conn.execute(
                 """
@@ -348,13 +440,15 @@ def upload_document(file: UploadFile = File(...)) -> dict[str, Any]:
                 """,
                 (filename, filename, file.content_type or "application/octet-stream", len(data), len(chunks), extracted),
             ).fetchone()
-            for index, (page, text) in enumerate(chunks):
-                conn.execute(
+            with conn.cursor() as cursor:
+                cursor.executemany(
                     "INSERT INTO document_chunks (document_id, chunk_text, page_number, chunk_index) VALUES (%s, %s, %s, %s)",
-                    (row["id"], text, page, index),
+                    [(row["id"], text, page, index) for index, (page, text) in enumerate(chunks)],
                 )
             row["chunk_count"] = len(chunks)
-        return document_record(row)
+        result = document_record(row)
+        result["suggestedQuestions"] = questions
+        return result
     except HTTPException:
         raise
     except Exception as error:

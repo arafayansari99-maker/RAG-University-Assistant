@@ -268,6 +268,93 @@
   }
 }
 
+.app-stage {
+   position: relative;
+   isolation: isolate;
+   background:
+      radial-gradient(circle at 88% 0%, hsl(var(--primary) / 0.12), transparent 28rem),
+      linear-gradient(135deg, hsl(var(--background)), hsl(var(--card) / 0.72));
+}
+
+.app-stage::before {
+   content: "";
+   position: absolute;
+   inset: 0;
+   z-index: -1;
+   pointer-events: none;
+   opacity: 0.38;
+   background-image:
+      linear-gradient(hsl(var(--primary) / 0.06) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--primary) / 0.06) 1px, transparent 1px);
+   background-size: 42px 42px;
+   mask-image: linear-gradient(to bottom right, black, transparent 70%);
+}
+
+.depth-card {
+   transform-style: preserve-3d;
+   transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 320ms ease, border-color 320ms ease;
+}
+
+.depth-card:hover {
+   transform: perspective(900px) rotateX(1deg) rotateY(-1deg) translateY(-3px);
+   box-shadow: var(--elevation-float);
+   border-color: hsl(var(--primary) / 0.32);
+}
+
+.depth-icon {
+   transform: translateZ(18px);
+}
+
+.page-kicker {
+   color: hsl(var(--primary));
+   font-size: 0.68rem;
+   font-weight: 800;
+   letter-spacing: 0.2em;
+   text-transform: uppercase;
+}
+
+.theme-control {
+   perspective: 800px;
+}
+
+.theme-prism {
+   position: relative;
+   width: 1.45rem;
+   height: 1.45rem;
+   transform-style: preserve-3d;
+}
+
+.theme-prism-face {
+   position: absolute;
+   inset: 0;
+   display: block;
+   border: 1px solid hsl(var(--primary) / 0.45);
+   border-radius: 0.35rem;
+   backface-visibility: hidden;
+   background: linear-gradient(135deg, hsl(var(--primary) / 0.9), hsl(var(--accent-gold) / 0.82));
+   box-shadow: 0 6px 14px hsl(var(--primary) / 0.2), inset 0 1px hsl(0 0% 100% / 0.35);
+}
+
+.theme-prism-front {
+   transform: translateZ(0.35rem) rotate(14deg);
+}
+
+.theme-prism-back {
+   transform: rotateY(180deg) translateZ(0.35rem) rotate(-14deg);
+   background: linear-gradient(135deg, hsl(var(--info) / 0.82), hsl(var(--primary) / 0.9));
+}
+
+@media (max-width: 767px) {
+   .theme-control {
+      min-height: 3rem;
+   }
+
+   .theme-options button {
+      min-height: 2.5rem;
+      min-width: 2.5rem;
+   }
+}
+
 /* Unlayered on purpose: must beat Tailwind utilities such as `text-sm`.
    iOS Safari zooms the whole page when a focused control's font-size < 16px. */
 @media (max-width: 767px) {
@@ -276,6 +363,14 @@
   textarea {
     font-size: 16px;
   }
+
+   .app-stage::before {
+      background-size: 28px 28px;
+   }
+
+   .depth-card:hover {
+      transform: translateY(-2px);
+   }
 }
 
 /* Honor the OS setting app-wide. Near-zero rather than `none` so that

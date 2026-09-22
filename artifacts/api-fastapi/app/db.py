@@ -14,7 +14,7 @@ if DATABASE_URL:
         conninfo=DATABASE_URL,
         min_size=1,
         max_size=int(os.getenv("DB_POOL_MAX", "5")),
-        kwargs={"row_factory": dict_row, "autocommit": True},
+        kwargs={"row_factory": dict_row, "autocommit": False},
         open=False,
     )
 

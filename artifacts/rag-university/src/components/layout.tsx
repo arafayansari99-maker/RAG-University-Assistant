@@ -3,10 +3,10 @@ import { Link, useLocation } from "wouter";
 import { MotionConfig, motion } from "framer-motion";
 import {
   BarChart3,
+  Blend,
   FileText,
   Library,
   Menu,
-  Monitor,
   Moon,
   Search,
   Sun,
@@ -30,7 +30,7 @@ const navItems = [
 
 const themeOptions = [
   { value: "light", icon: Sun },
-  { value: "system", icon: Monitor },
+  { value: "system", icon: Blend },
   { value: "dark", icon: Moon },
 ] as const;
 
@@ -98,9 +98,19 @@ function ThemeToggle() {
   if (!mounted) return null;
 
   return (
-    <div className="flex items-center gap-2 px-1">
-      <span className="mr-auto text-xs text-muted-foreground">Theme</span>
-      <div className="flex items-center gap-0.5 rounded-md bg-secondary p-0.5">
+    <div className="theme-control flex items-center gap-3 rounded-xl border border-border/70 bg-background/70 px-3 py-2 shadow-card backdrop-blur-sm">
+      <motion.div
+        className="theme-prism hidden shrink-0 sm:block"
+        animate={{ rotateY: theme === "dark" ? 180 : theme === "system" ? 90 : 0 }}
+        transition={{ type: "spring", stiffness: 120, damping: 16 }}
+        whileHover={{ rotateX: -12, rotateZ: 8, scale: 1.08 }}
+        aria-hidden="true"
+      >
+        <span className="theme-prism-face theme-prism-front" />
+        <span className="theme-prism-face theme-prism-back" />
+      </motion.div>
+      <span className="mr-auto text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Theme</span>
+      <div className="theme-options flex items-center gap-0.5 rounded-lg bg-secondary/80 p-0.5">
         {themeOptions.map(({ value, icon: Icon }) => (
           <button
             key={value}
@@ -109,10 +119,10 @@ function ThemeToggle() {
             aria-label={value.charAt(0).toUpperCase() + value.slice(1)}
             aria-pressed={theme === value}
             className={cn(
-              "flex h-10 w-10 items-center justify-center rounded transition-colors md:h-8 md:w-8",
+              "flex h-10 w-10 items-center justify-center rounded-md transition-all duration-300 md:h-8 md:w-8",
               theme === value
-                ? "bg-background text-foreground shadow-card"
-                : "text-muted-foreground hover:text-foreground",
+                ? "bg-background text-foreground shadow-card [transform:translateY(-1px)]"
+                : "text-muted-foreground hover:bg-background/60 hover:text-foreground",
             )}
           >
             <Icon className="h-4 w-4" />
@@ -134,7 +144,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     <MotionConfig reducedMotion="user">
       <div className="flex h-dvh overflow-hidden bg-background">
         <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-card md:flex">
-          <div className="flex h-16 shrink-0 items-center border-b border-border px-6">
+          <div className="flex h-16 shrink-0 items-center border-b border-border px-5 lg:px-6">
             <Brand />
           </div>
           <div className="flex-1 overflow-y-auto px-3 py-6">
@@ -146,7 +156,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </aside>
 
         <main className="flex min-w-0 flex-1 flex-col bg-background">
-          <header className="flex h-14 shrink-0 items-center gap-1 border-b border-border bg-card px-2 md:hidden">
+          <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-1 border-b border-border/80 bg-card/90 px-2 shadow-sm backdrop-blur-md md:hidden">
             <Sheet open={navOpen} onOpenChange={setNavOpen}>
               <SheetTrigger
                 aria-label="Open navigation"
@@ -177,7 +187,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <Brand className="text-base" />
           </header>
 
-          <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+          <div className="app-stage min-h-0 flex-1 overflow-y-auto">{children}</div>
         </main>
       </div>
     </MotionConfig>

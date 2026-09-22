@@ -10,7 +10,7 @@ import {
   useAskQuestion
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Send, PlusCircle, MessageSquare, Trash2, ThumbsUp, ThumbsDown, FileText, ChevronRight, BookOpen, Library, Download, FileDown, MoreVertical } from "lucide-react";
+import { Send, PlusCircle, Trash2, ThumbsUp, ThumbsDown, FileText, ChevronRight, BookOpen, Library, Download, FileDown, MoreVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,6 +19,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import CitationDrawer from "@/components/citation-drawer";
+import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
 
 interface Citation {
   documentName: string;
@@ -39,6 +41,7 @@ export default function ChatPage() {
   const [activeCitation, setActiveCitation] = useState<Citation | null>(null);
   const [activeCitationIndex, setActiveCitationIndex] = useState(0);
   const [lastQuestion, setLastQuestion] = useState("");
+  const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Queries
@@ -50,6 +53,15 @@ export default function ChatPage() {
   const displayHistory = useMemo(() => {
     return history ?? [];
   }, [history]);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("athena-suggested-questions") ?? "[]");
+      if (Array.isArray(saved)) setSuggestedQuestions(saved.filter((item): item is string => typeof item === "string").slice(0, 4));
+    } catch {
+      setSuggestedQuestions([]);
+    }
+  }, []);
 
   // Mutations
   const createSession = useCreateChatSession();
@@ -102,6 +114,7 @@ export default function ChatPage() {
       .replace(/\[source\s*\d+\]|\[Sources?\]/gi, "Sources")
       .replace(/\r\n/g, "\n")
       .replace(/\r/g, "\n")
+      .replace(/^\s*[-*]\s+/gm, "  • ")
       .replace(/\n{3,}/g, "\n\n")
       .trim();
 
@@ -109,6 +122,20 @@ export default function ChatPage() {
 
     if (role === "assistant") {
       const output: React.ReactNode[] = [];
+      const isHeadingLine = (line: string, lineIndex: number) => {
+        const normalized = line.trim().replace(/^#{1,6}\s+/, "").replace(/^[-•]\s+/, "");
+        const nextLine = lines.slice(lineIndex + 1).find((candidate) => candidate.trim());
+        return Boolean(
+          normalized &&
+          normalized.length <= 90 &&
+          normalized.split(/\s+/).length <= 12 &&
+          !/[.!?]$/.test(normalized) &&
+          (/^#{1,6}\s+/.test(line.trim()) ||
+            /^[-•]\s+[^:]+$/.test(line.trim()) ||
+            /:$/.test(line.trim())) &&
+          (!nextLine || !/^[-•]\s+/.test(nextLine.trim()) || /^[-•]\s+[^:]+$/.test(line.trim()))
+        );
+      };
       let index = 0;
 
       while (index < lines.length) {
@@ -164,10 +191,30 @@ export default function ChatPage() {
           continue;
         }
 
-        if (index === 0) {
-          output.push(<div key={index} className="text-2xl font-black text-primary leading-tight tracking-tight">{trimmedLine}</div>);
+        if (index === 0 || isHeadingLine(line, index)) {
+          const heading = trimmedLine.replace(/^#{1,6}\s+/, "").replace(/^[-•]\s+/, "").replace(/:$/, "");
+          output.push(
+            <div key={index} className={cn(
+              "font-black text-primary leading-tight tracking-tight",
+              index === 0 ? "text-2xl" : "mt-4 text-lg md:text-xl",
+            )}>
+              {heading}
+            </div>,
+          );
         } else if (/^Sources:/i.test(trimmedLine)) {
           output.push(<div key={index} className="mt-4 text-sm font-black text-primary uppercase tracking-wide">{trimmedLine}</div>);
+        } else if (/^Follow-up:/i.test(trimmedLine)) {
+          const followUp = trimmedLine.replace(/^Follow-up:\s*/i, "");
+          output.push(
+            <button
+              key={index}
+              type="button"
+              onClick={() => setInput(followUp)}
+              className="mt-4 w-full rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-left text-sm font-medium text-primary transition-colors hover:border-primary/40 hover:bg-primary/10"
+            >
+              {followUp}
+            </button>,
+          );
         } else if (/^\s*•\s*/.test(trimmedLine)) {
           output.push(<div key={index} className="ml-4 text-sm leading-7">{trimmedLine}</div>);
         } else {
@@ -415,15 +462,19 @@ ${msgHtml}
           ) : (
             <div className="space-y-1">
               {sessions?.map(session => (
-                <div 
+                <motion.div
                   key={session.id}
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
                   onClick={() => setActiveSessionId(session.id)}
                   className={`group flex items-center justify-between p-3 rounded-md cursor-pointer transition-colors ${
                     activeSessionId === session.id ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-foreground'
                   }`}
                 >
                   <div className="flex items-center gap-3 overflow-hidden">
-                    <MessageSquare className={`h-4 w-4 shrink-0 ${activeSessionId === session.id ? 'text-primary-foreground/80' : 'text-muted-foreground'}`} />
+                    <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${activeSessionId === session.id ? 'bg-primary-foreground/15' : 'bg-primary/10'}`}>
+                      <Library className={`h-3.5 w-3.5 ${activeSessionId === session.id ? 'text-primary-foreground' : 'text-primary'}`} />
+                    </span>
                     <span className="text-sm truncate font-medium">{session.title || "New Investigation"}</span>
                   </div>
                   <Button 
@@ -434,7 +485,7 @@ ${msgHtml}
                   >
                     <Trash2 className="h-3 w-3" />
                   </Button>
-                </div>
+                </motion.div>
               ))}
             </div>
           )}
@@ -485,33 +536,34 @@ ${msgHtml}
         )}
         <div className="flex-1 overflow-y-auto p-4 md:p-8" ref={scrollRef}>
           {!activeSessionId && !displayHistory.length && !isStreaming ? (
-            <div className="h-full flex flex-col items-center justify-center max-w-2xl mx-auto text-center space-y-6">
-              <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-4">
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="mx-auto flex h-full max-w-3xl flex-col items-center justify-center space-y-6 text-center">
+              <motion.div animate={{ rotateY: [0, 8, 0], rotateZ: [0, -2, 0] }} transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }} className="depth-card flex h-20 w-20 items-center justify-center rounded-3xl border border-primary/20 bg-primary/10 shadow-float [transform-style:preserve-3d]">
                 <Library className="h-8 w-8 text-primary" />
-              </div>
-              <h2 className="font-serif text-3xl font-bold text-foreground">Athena Research Assistant</h2>
+              </motion.div>
+              <p className="page-kicker">University knowledge engine</p>
+              <h2 className="font-serif text-3xl font-bold tracking-tight text-foreground md:text-5xl">Athena Research Assistant</h2>
               <p className="text-lg text-muted-foreground max-w-xl">
                 Ask questions about university policies, course catalogs, and academic guidelines. Responses are backed by official documentation.
               </p>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full mt-8 text-left">
-                {[
+                {(suggestedQuestions.length > 0 ? suggestedQuestions : [
                   "What are the graduation requirements for Computer Science?",
                   "How do I apply for academic leave?",
                   "What is the policy on late assignments?",
                   "Explain the library borrowing rules."
-                ].map(q => (
+                ]).map(q => (
                   <button 
                     key={q}
                     onClick={() => { setInput(q); }}
-                    className="p-4 rounded-xl border border-border bg-card hover:border-primary/50 hover:shadow-sm transition-all text-sm text-foreground flex items-start gap-3"
+                    className="depth-card flex items-start gap-3 rounded-2xl border border-border/80 bg-card/80 p-4 text-sm text-foreground shadow-card backdrop-blur-sm"
                   >
                     <ChevronRight className="h-5 w-5 text-primary shrink-0" />
                     <span>{q}</span>
                   </button>
                 ))}
               </div>
-            </div>
+            </motion.div>
           ) : (
             <div className="max-w-4xl mx-auto space-y-8 pb-8">
               {displayHistory.map((msg) => (
@@ -522,7 +574,7 @@ ${msgHtml}
                     {msg.role === 'assistant' ? <Library className="h-4 w-4" /> : <div className="font-medium text-xs">Me</div>}
                   </div>
                   <div className={`flex-1 max-w-[85%] ${msg.role === 'assistant' ? '' : 'flex flex-col items-end'}`}>
-                    <div className={`prose prose-sm md:prose-base dark:prose-invert max-w-none ${
+                    <div className={`depth-card prose prose-sm rounded-2xl md:prose-base dark:prose-invert max-w-none ${
                       msg.role === 'user' ? 'bg-secondary px-5 py-3 rounded-2xl rounded-tr-sm text-foreground inline-block' : 'text-foreground'
                     }`}>
                       {renderMessageBody(msg.role, msg.content)}
@@ -636,8 +688,8 @@ ${msgHtml}
         </div>
 
         {/* Input Area */}
-        <div className="p-4 bg-background border-t border-border">
-          <div className="max-w-4xl mx-auto relative flex items-end shadow-sm border border-border rounded-xl bg-card overflow-hidden focus-within:ring-1 focus-within:ring-primary focus-within:border-primary transition-all">
+        <div className="border-t border-border/80 bg-background/75 p-3 backdrop-blur-md sm:p-4">
+          <div className="depth-card mx-auto relative flex max-w-4xl items-end overflow-hidden rounded-2xl border border-border/80 bg-card/90 shadow-card focus-within:border-primary focus-within:ring-1 focus-within:ring-primary">
             <Textarea 
               value={input}
               onChange={(e) => setInput(e.target.value)}

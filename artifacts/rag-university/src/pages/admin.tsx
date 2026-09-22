@@ -2,6 +2,7 @@ import { useGetAnalyticsStats, useGetTopQuestions } from "@workspace/api-client-
 import { Library, MessageSquare, Files, Zap, HelpCircle, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { motion } from "framer-motion";
 
 export default function AdminPage() {
   const { data: stats, isLoading: statsLoading } = useGetAnalyticsStats();
@@ -43,11 +44,12 @@ export default function AdminPage() {
   ];
 
   return (
-    <div className="p-8 max-w-6xl mx-auto space-y-8">
-      <div>
-        <h1 className="text-3xl font-serif font-bold text-foreground tracking-tight">Admin Insights</h1>
+    <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6 md:space-y-8 md:p-8">
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="depth-card rounded-2xl border border-border/80 bg-card/75 p-5 shadow-card backdrop-blur-sm md:p-6">
+        <p className="page-kicker">Control room</p>
+        <h1 className="mt-2 text-3xl font-serif font-bold tracking-tight text-foreground md:text-4xl">Admin Insights</h1>
         <p className="text-muted-foreground mt-1">Platform usage, knowledge base health, and user behavior analytics.</p>
-      </div>
+      </motion.div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {statsLoading ? (
@@ -65,12 +67,13 @@ export default function AdminPage() {
           ))
         ) : (
           statCards.map((stat, i) => (
-            <Card key={i} className="border-border shadow-sm">
+            <motion.div key={i} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }} className="depth-card">
+            <Card className="h-full border-border/80 bg-card/80 shadow-card backdrop-blur-sm">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
                   {stat.title}
                 </CardTitle>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${stat.bg}`}>
+                <div className={`depth-icon flex h-10 w-10 items-center justify-center rounded-2xl ${stat.bg}`}>
                   <stat.icon className={`h-4 w-4 ${stat.color}`} />
                 </div>
               </CardHeader>
@@ -79,12 +82,13 @@ export default function AdminPage() {
                 <p className="text-xs text-muted-foreground mt-1">{stat.description}</p>
               </CardContent>
             </Card>
+            </motion.div>
           ))
         )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="col-span-1 lg:col-span-2 border-border shadow-sm">
+        <Card className="depth-card col-span-1 border-border/80 bg-card/80 shadow-card backdrop-blur-sm lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <HelpCircle className="h-5 w-5 text-primary" />
@@ -121,7 +125,7 @@ export default function AdminPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-border shadow-sm bg-primary/5 border-primary/10">
+        <Card className="depth-card border-primary/15 bg-primary/5 shadow-card backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-primary">
               <Library className="h-5 w-5" />

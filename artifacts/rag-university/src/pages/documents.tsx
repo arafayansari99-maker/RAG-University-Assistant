@@ -16,6 +16,8 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DocumentPreviewDrawer } from "@/components/document-preview-drawer";
+import { apiBaseUrl } from "@/lib/api-base";
+import { motion } from "framer-motion";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -217,12 +219,25 @@ export default function DocumentsPage() {
       formData.append("file", item.file);
 
       try {
-        const apiBase = ((import.meta.env.VITE_API_BASE as string) || (import.meta.env.VITE_API_BASE_URL as string) || "http://localhost:3001").replace(/\/+$/, "");
-        const res = await fetch(`${apiBase}/api/documents`, {
+        const res = await fetch(`${apiBaseUrl}/api/documents`, {
           method: "POST",
           body: formData,
         });
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Upload failed");
+        if (!res.ok) {
+          const responseText = await res.text();
+          let message = responseText;
+          try {
+            const payload = JSON.parse(responseText) as { detail?: string; error?: string };
+            message = payload.detail ?? payload.error ?? responseText;
+          } catch {
+            // Preserve plain proxy and platform error responses.
+          }
+          throw new Error(message || `Upload failed (HTTP ${res.status})`);
+        }
+        const uploaded = await res.json() as { suggestedQuestions?: string[] };
+        if (uploaded.suggestedQuestions?.length) {
+          localStorage.setItem("athena-suggested-questions", JSON.stringify(uploaded.suggestedQuestions.slice(0, 4)));
+        }
         setQueue((prev) => prev.map((q) => q.id === item.id ? { ...q, status: "done" } : q));
         queryClient.invalidateQueries({ queryKey: getListDocumentsQueryKey() });
       } catch (err) {
@@ -409,7 +424,7 @@ export default function DocumentsPage() {
 
   return (
     <div
-      className="p-6 md:p-8 max-w-6xl mx-auto relative"
+      className="p-4 sm:p-6 md:p-8 max-w-6xl mx-auto relative"
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
@@ -433,9 +448,10 @@ export default function DocumentsPage() {
       )}
 
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-6">
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="depth-card mb-6 flex flex-col gap-5 rounded-2xl border border-border/80 bg-card/75 p-5 shadow-card backdrop-blur-sm md:flex-row md:items-start md:justify-between md:p-6">
         <div>
-          <h1 className="text-3xl font-serif font-bold text-foreground tracking-tight">Library & Index</h1>
+          <p className="page-kicker">Knowledge vault</p>
+          <h1 className="mt-2 text-3xl font-serif font-bold tracking-tight text-foreground md:text-4xl">Library & Index</h1>
           <p className="text-muted-foreground mt-1">Drag and drop files or folders — PDF, DOCX, TXT supported.</p>
 
           {!isLoading && hasDocuments && (
@@ -472,7 +488,7 @@ export default function DocumentsPage() {
             Upload Files
           </Button>
         </div>
-      </div>
+      </motion.div>
 
       {/* Search + Filter */}
       {hasDocuments && (
@@ -563,7 +579,7 @@ export default function DocumentsPage() {
       )}
 
       {/* Document table / empty states */}
-      <div className={`bg-card border rounded-xl shadow-sm overflow-hidden transition-colors ${isDragging ? "border-primary/50 bg-primary/5" : "border-border"}`}>
+      <div className={`depth-card overflow-x-auto rounded-2xl border bg-card/85 shadow-card backdrop-blur-sm transition-colors ${isDragging ? "border-primary/50 bg-primary/5" : "border-border/80"}`}>
         {isLoading ? (
           <div className="p-6 space-y-4">
             {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-12 w-full" />)}
@@ -603,7 +619,7 @@ export default function DocumentsPage() {
             </Button>
           </div>
         ) : (
-          <Table>
+          <Table className="min-w-[760px]">
             <TableHeader className="bg-secondary/50">
               <TableRow>
                 <TableHead className="w-10 pl-4">
