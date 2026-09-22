@@ -1,14 +1,14 @@
-﻿# RAG University Assistant
+﻿# Athena RAG University Assistant
 
-A modern Retrieval-Augmented Generation (RAG) application designed to help university students and staff find answers to academic questions by searching through university documents, policies, and handbooks.
+A university knowledge assistant that lets students and staff ask questions about policies, course catalogs, handbooks, and academic guidelines. Athena retrieves relevant indexed document content, streams answers through Groq, and shows the supporting citations.
 
 ## 🎯 Purpose
 
-The RAG University Assistant streamlines access to university information by:
-- **Intelligent Search**: Uses semantic search to find relevant information across university documents
-- **Quick Answers**: Generates accurate, source-backed answers using Groq's fast LLM inference
-- **Professional Formatting**: Presents answers in clean, readable tables and structured text
-- **Document Management**: Organizes and indexes university materials for efficient retrieval
+Athena provides:
+- **Research Chat**: Streaming answers with citations, confidence scores, feedback, and export options
+- **Chat History**: Create, select, and delete sessions from the shared navigation. New sessions open directly in Research Chat with suggested questions ready to use.
+- **Document Library**: Upload PDF, DOCX, and TXT files, inspect chunks, delete documents, and rebuild indexes
+- **Admin Insights**: Review document counts, chunk counts, answered questions, confidence, feedback, and top questions
 
 ## 📚 Use Cases
 
@@ -34,28 +34,43 @@ The RAG University Assistant streamlines access to university information by:
 
 ### Frontend (Vite + React)
 - **Location**: `artifacts/rag-university/`
-- **Framework**: React 18 with TypeScript
+- **Framework**: React with TypeScript
 - **Styling**: Tailwind CSS with Shadcn UI components
 - **State Management**: TanStack Query (React Query)
 - **Features**:
   - Real-time chat interface with streaming responses
   - Document upload and management
-  - Session-based conversation history
+   - Session-based conversation history in the main navigation
+   - Four suggested questions on every empty chat session
   - Dark mode support
   - Professional table rendering for structured data
   - Source citations and confidence scoring
 
-### Backend (FastAPI + Python)
+### Backend Options
+
+The repository contains two API implementations with the same broad route contract:
+
+#### Express API (local development and Fly.io/Replit)
+- **Location**: `artifacts/api-server/`
+- **Framework**: Express with TypeScript
+- **Database**: PostgreSQL through Drizzle, with a JSON development fallback
+- **APIs**: RESTful + Server-Sent Events (SSE)
+- **Features**:
+   - Asynchronous document processing and structured chunking
+   - PostgreSQL full-text, BM25-style, and hashed-vector retrieval
+   - OCR and table-aware extraction support
+   - LLM integration with Groq
+
+#### FastAPI API (Vercel/Supabase deployment)
 - **Location**: `artifacts/api-fastapi/`
 - **Framework**: FastAPI with Uvicorn
 - **Database**: Supabase PostgreSQL through psycopg
 - **APIs**: RESTful + Server-Sent Events (SSE)
 - **Features**:
-  - Document processing (PDF, DOCX, TXT)
-  - Vector embeddings and semantic search
-  - LLM integration with Groq
-  - Session management
-  - Document chunk indexing
+   - Synchronous PDF, DOCX, and TXT extraction
+   - PostgreSQL full-text and keyword retrieval
+   - LLM integration with Groq
+   - Session management and document chunk indexing
 
 ### Database
 - **Development**: File-based JSON storage (fallback)
@@ -77,13 +92,11 @@ The RAG University Assistant streamlines access to university information by:
 - **Theme**: next-themes (Dark Mode)
 
 ### Backend
-- **Runtime**: Python 3.12+
-- **Framework**: FastAPI + Uvicorn
-- **Database**: Supabase PostgreSQL + psycopg
-- **AI**: Groq Python SDK (openai/gpt-oss-20b)
-- **PDF**: pypdf
-- **DOCX**: python-docx
-- **Validation**: Pydantic
+- **Runtime**: Node.js for Express, Python 3.12+ for FastAPI
+- **Frameworks**: Express and FastAPI
+- **Database**: PostgreSQL/Supabase, Drizzle ORM, and psycopg
+- **AI**: Groq SDKs
+- **Document parsing**: pdf-parse/pdfjs-dist, pypdf, mammoth, and python-docx
 
 ### Package Management
 - **Monorepo**: PNPM Workspaces
@@ -98,7 +111,7 @@ The RAG University Assistant streamlines access to university information by:
 ## ✨ Key Features
 
 ### Smart Answer Generation
-- Retrieves relevant document chunks using semantic search
+- Retrieves relevant document chunks using the selected backend's text and hybrid retrieval pipeline
 - Generates contextual answers using Groq's fast LLM
 - Sanitizes markdown artifacts for professional display
 - Preserves table structures for data presentation
@@ -107,13 +120,15 @@ The RAG University Assistant streamlines access to university information by:
 ### Document Processing
 - Supports PDF, DOCX, and TXT formats
 - Automatic table detection and preservation
-- OCR support for scanned documents
+- OCR and table-aware extraction support in the Express backend
 - Intelligent chunking for semantic search
 - Document metadata tracking
 
 ### User Experience
 - Real-time streaming responses via SSE
-- Chat history with session management
+- Chat history with session management in the sidebar below Admin Insights
+- New and existing sessions route back to Research Chat when selected
+- Empty sessions show four relevant suggested questions
 - Source citations with document references
 - Professional table rendering in responses
 - Dark mode with theme persistence
@@ -198,7 +213,17 @@ RAG-University-Assistant/
    pnpm install
    ```
 
-2. **Configure environment**
+2. **Start the local API**
+   The frontend defaults to `http://localhost:3001`. The Express API can use its JSON fallback without PostgreSQL, but Groq and database-backed features require the relevant environment variables.
+   ```powershell
+   cd artifacts/api-server
+   pnpm run build
+   $env:PORT="3001"
+   $env:CORS_ORIGINS="http://localhost:5173"
+   pnpm run start
+   ```
+
+3. **Configure the FastAPI option when deploying to Supabase/Vercel**
    ```bash
    cd artifacts/api-fastapi
    python -m venv .venv
@@ -206,20 +231,13 @@ RAG-University-Assistant/
    pip install -r requirements.txt
    ```
 
-3. **Run in development**
-    - **Terminal 1 - FastAPI Server**
-     ```bash
-       cd artifacts/api-fastapi
-       uvicorn app.main:app --reload --port 8000
-     ```
-   
-   - **Terminal 2 - UI Dev Server**
+4. **Run the UI in a second terminal**
      ```bash
      cd artifacts/rag-university
      pnpm run dev
      ```
 
-4. **Open in browser**
+5. **Open in browser**
    ```
    http://localhost:5173
    ```
@@ -243,14 +261,16 @@ VITE_API_BASE=https://your-api-url pnpm run build
 ### Chat
 - `POST /api/chat/ask` - Submit question and get streaming response (SSE)
 - `GET /api/chat/sessions` - List chat sessions
-- `GET /api/chat/history/:sessionId` - Get conversation history
-- `POST /api/chat/feedback` - Submit answer feedback
+- `POST /api/chat/sessions` - Create a chat session
+- `GET /api/chat/sessions/:sessionId/messages` - Get conversation history
+- `DELETE /api/chat/sessions/:sessionId` - Delete a chat session
+- `POST /api/chat/messages/:messageId/feedback` - Submit answer feedback
 
 ### Documents
 - `POST /api/documents` - Upload document
 - `GET /api/documents` - List all documents
 - `DELETE /api/documents/:id` - Delete document
-- `POST /api/documents/rebuild` - Rebuild search index
+- `POST /api/documents/rebuild-index` - Rebuild search index
 
 ### Analytics
 - `GET /api/analytics/stats` - Get platform statistics
@@ -261,7 +281,7 @@ VITE_API_BASE=https://your-api-url pnpm run build
 
 ## 🎓 Learning Resources
 
-- **Semantic Search**: Uses embeddings for context-aware document retrieval
+- **Document Retrieval**: Combines PostgreSQL full-text/keyword retrieval with the Express backend's hybrid scoring pipeline
 - **RAG Pattern**: Combines retrieval with LLM generation for accurate answers
 - **Streaming Responses**: Server-Sent Events (SSE) for real-time answer delivery
 - **Monorepo Architecture**: PNPM workspaces for scalable multi-package projects
