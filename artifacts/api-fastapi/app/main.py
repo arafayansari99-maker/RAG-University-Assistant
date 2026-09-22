@@ -327,6 +327,16 @@ def ask(request: AskQuestion) -> StreamingResponse:
                 (question[:60],),
             ).fetchone()
             session_id = row["id"]
+        else:
+            existing = conn.execute(
+                "SELECT title FROM chat_sessions WHERE id = %s",
+                (session_id,),
+            ).fetchone()
+            if existing and existing["title"] == "New Chat":
+                conn.execute(
+                    "UPDATE chat_sessions SET title = %s WHERE id = %s",
+                    (question[:60], session_id),
+                )
         conn.execute(
             "INSERT INTO chat_messages (session_id, role, content) VALUES (%s, 'user', %s)",
             (session_id, question),

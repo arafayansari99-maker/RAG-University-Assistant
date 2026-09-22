@@ -3,6 +3,7 @@ import {
   useGetChatHistory,
   useSubmitFeedback,
   getGetChatHistoryQueryKey,
+  getListChatSessionsQueryKey,
   useAskQuestion
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -366,6 +367,7 @@ export default function ChatPage() {
       setIsStreaming(false);
       if (currentSessionId) {
         queryClient.invalidateQueries({ queryKey: getGetChatHistoryQueryKey(currentSessionId) });
+        queryClient.invalidateQueries({ queryKey: getListChatSessionsQueryKey() });
       }
     }
   };
