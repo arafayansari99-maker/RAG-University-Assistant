@@ -1,26 +1,21 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { 
-  useListChatSessions, 
-  useCreateChatSession, 
-  useDeleteChatSession, 
   useGetChatHistory,
   useSubmitFeedback,
   getGetChatHistoryQueryKey,
-  getListChatSessionsQueryKey,
   useAskQuestion
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Send, PlusCircle, Trash2, ThumbsUp, ThumbsDown, FileText, ChevronRight, BookOpen, Library, Download, FileDown, MoreVertical } from "lucide-react";
+import { Send, Trash2, ThumbsUp, ThumbsDown, FileText, ChevronRight, Library, Download, FileDown, MoreVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import CitationDrawer from "@/components/citation-drawer";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
+import { useChatHistoryNavigation } from "@/components/layout";
 
 interface Citation {
   documentName: string;
@@ -31,7 +26,7 @@ interface Citation {
 
 export default function ChatPage() {
   const queryClient = useQueryClient();
-  const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
+  const { sessions, activeSessionId, setActiveSessionId, createSession, deleteSession } = useChatHistoryNavigation();
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
@@ -45,7 +40,6 @@ export default function ChatPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Queries
-  const { data: sessions, isLoading: sessionsLoading } = useListChatSessions();
   const { data: history, isLoading: historyLoading } = useGetChatHistory(activeSessionId!, {
     query: { enabled: !!activeSessionId, queryKey: getGetChatHistoryQueryKey(activeSessionId!) }
   });
@@ -64,8 +58,6 @@ export default function ChatPage() {
   }, []);
 
   // Mutations
-  const createSession = useCreateChatSession();
-  const deleteSession = useDeleteChatSession();
   const submitFeedback = useSubmitFeedback();
 
   // Scroll to bottom when history changes or streaming updates
@@ -75,33 +67,9 @@ export default function ChatPage() {
     }
   }, [displayHistory, streamingContent]);
 
-  const handleCreateSession = () => {
-    createSession.mutate(undefined, {
-      onSuccess: (newSession) => {
-        setActiveSessionId(newSession.id);
-        queryClient.invalidateQueries({ queryKey: getListChatSessionsQueryKey() });
-      }
-    });
-  };
-
-  const handleDeleteSession = (id: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    deleteSession.mutate({ sessionId: id }, {
-      onSuccess: () => {
-        if (activeSessionId === id) setActiveSessionId(null);
-        queryClient.invalidateQueries({ queryKey: getListChatSessionsQueryKey() });
-      }
-    });
-  };
-
   const handleDeleteActiveChat = () => {
     if (!activeSessionId) return;
-    deleteSession.mutate({ sessionId: activeSessionId }, {
-      onSuccess: () => {
-        setActiveSessionId(null);
-        queryClient.invalidateQueries({ queryKey: getListChatSessionsQueryKey() });
-      }
-    });
+    void deleteSession(activeSessionId);
   };
 
   const renderMessageBody = (role: "user" | "assistant", content: string) => {
@@ -238,10 +206,9 @@ export default function ChatPage() {
     // Create session if none exists
     if (!currentSessionId) {
       try {
-        const session = await createSession.mutateAsync(undefined);
+        const session = await createSession();
         currentSessionId = session.id;
         setActiveSessionId(session.id);
-        queryClient.invalidateQueries({ queryKey: getListChatSessionsQueryKey() });
       } catch (err) {
         console.error("Failed to create session", err);
         return;
@@ -441,57 +408,6 @@ ${msgHtml}
   return (
     <>
     <div className="flex h-full">
-      {/* Session History Sidebar */}
-      <div className="w-72 border-r border-border bg-card flex flex-col hidden lg:flex">
-        <div className="p-4 border-b border-border flex justify-between items-center">
-          <h2 className="font-medium text-sm text-muted-foreground uppercase tracking-wider">Research History</h2>
-          <Button variant="ghost" size="icon" onClick={handleCreateSession} title="New Session">
-            <PlusCircle className="h-5 w-5 text-primary" />
-          </Button>
-        </div>
-        <ScrollArea className="flex-1 p-3">
-          {sessionsLoading ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full rounded-md" />)}
-            </div>
-          ) : sessions?.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground text-sm">
-              <BookOpen className="h-8 w-8 mx-auto mb-3 opacity-20" />
-              <p>No research sessions yet.</p>
-            </div>
-          ) : (
-            <div className="space-y-1">
-              {sessions?.map(session => (
-                <motion.div
-                  key={session.id}
-                  initial={{ opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  onClick={() => setActiveSessionId(session.id)}
-                  className={`group flex items-center justify-between p-3 rounded-md cursor-pointer transition-colors ${
-                    activeSessionId === session.id ? 'bg-primary text-primary-foreground' : 'hover:bg-secondary text-foreground'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 overflow-hidden">
-                    <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${activeSessionId === session.id ? 'bg-primary-foreground/15' : 'bg-primary/10'}`}>
-                      <Library className={`h-3.5 w-3.5 ${activeSessionId === session.id ? 'text-primary-foreground' : 'text-primary'}`} />
-                    </span>
-                    <span className="text-sm truncate font-medium">{session.title || "New Investigation"}</span>
-                  </div>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className={`h-6 w-6 opacity-0 group-hover:opacity-100 ${activeSessionId === session.id ? 'hover:bg-primary-foreground/20 text-primary-foreground' : 'hover:bg-destructive/10 text-destructive'}`}
-                    onClick={(e) => handleDeleteSession(session.id, e)}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </motion.div>
-              ))}
-            </div>
-          )}
-        </ScrollArea>
-      </div>
-
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col bg-background relative">
         {/* Session toolbar — visible when messages exist */}
@@ -535,7 +451,7 @@ ${msgHtml}
           </div>
         )}
         <div className="flex-1 overflow-y-auto p-4 md:p-8" ref={scrollRef}>
-          {!activeSessionId && !displayHistory.length && !isStreaming ? (
+          {!displayHistory.length && !isStreaming ? (
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="mx-auto flex h-full max-w-3xl flex-col items-center justify-center space-y-6 text-center">
               <motion.div animate={{ rotateY: [0, 8, 0], rotateZ: [0, -2, 0] }} transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }} className="depth-card flex h-20 w-20 items-center justify-center rounded-3xl border border-primary/20 bg-primary/10 shadow-float [transform-style:preserve-3d]">
                 <Library className="h-8 w-8 text-primary" />

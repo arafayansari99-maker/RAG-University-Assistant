@@ -1,6 +1,13 @@
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { MotionConfig, motion } from "framer-motion";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useCreateChatSession,
+  useDeleteChatSession,
+  useListChatSessions,
+  getListChatSessionsQueryKey,
+} from "@workspace/api-client-react";
 import {
   BarChart3,
   Blend,
@@ -10,6 +17,8 @@ import {
   Moon,
   Search,
   Sun,
+  PlusCircle,
+  Trash2,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 
@@ -34,6 +43,28 @@ const themeOptions = [
   { value: "dark", icon: Moon },
 ] as const;
 
+interface ChatSessionSummary {
+  id: number;
+  title?: string | null;
+}
+
+interface ChatHistoryNavigationValue {
+  sessions: ChatSessionSummary[] | undefined;
+  sessionsLoading: boolean;
+  activeSessionId: number | null;
+  setActiveSessionId: (id: number | null) => void;
+  createSession: () => Promise<ChatSessionSummary>;
+  deleteSession: (id: number) => Promise<void>;
+}
+
+const ChatHistoryNavigationContext = createContext<ChatHistoryNavigationValue | null>(null);
+
+export function useChatHistoryNavigation() {
+  const context = useContext(ChatHistoryNavigationContext);
+  if (!context) throw new Error("useChatHistoryNavigation must be used inside Layout");
+  return context;
+}
+
 function Brand({ className }: { className?: string }) {
   return (
     <span
@@ -56,7 +87,13 @@ function Brand({ className }: { className?: string }) {
 /** `layoutGroup` keeps the desktop and mobile indicators independent — both
  *  lists are mounted at once, and a duplicated layoutId would fight itself. */
 function NavList({ layoutGroup }: { layoutGroup: string }) {
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
+  const { sessions, sessionsLoading, activeSessionId, setActiveSessionId, createSession, deleteSession } = useChatHistoryNavigation();
+
+  const handleNewSession = async () => {
+    await createSession();
+    navigate("/");
+  };
 
   return (
     <nav className="space-y-1">
@@ -86,6 +123,56 @@ function NavList({ layoutGroup }: { layoutGroup: string }) {
           </Link>
         );
       })}
+      <div className="my-4 border-t border-border/80" aria-hidden="true" />
+      <div className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        Chat History
+      </div>
+      <button
+        type="button"
+        onClick={() => void handleNewSession()}
+        className="flex min-h-10 w-full items-center gap-3 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+      >
+        <PlusCircle className="h-4 w-4 shrink-0 text-primary" />
+        <span>New Session</span>
+      </button>
+      {sessionsLoading ? (
+        <div className="px-3 py-3 text-sm text-muted-foreground">Loading sessions...</div>
+      ) : sessions?.length ? (
+        <div className="space-y-1">
+          {sessions.map((session) => (
+            <div
+              key={session.id}
+              className={cn(
+                "group flex min-h-10 items-center justify-between gap-2 rounded-md px-3 text-sm transition-colors",
+                activeSessionId === session.id
+                  ? "bg-primary text-primary-foreground"
+                  : "text-foreground hover:bg-secondary",
+              )}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveSessionId(session.id);
+                  navigate("/");
+                }}
+                className="min-w-0 flex-1 truncate py-2 text-left font-medium"
+              >
+                {session.title || "New Investigation"}
+              </button>
+              <button
+                type="button"
+                aria-label={`Delete ${session.title || "session"}`}
+                onClick={() => void deleteSession(session.id)}
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="px-3 py-2 text-sm text-muted-foreground">No research sessions yet.</p>
+      )}
     </nav>
   );
 }
@@ -136,13 +223,41 @@ function ThemeToggle() {
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [navOpen, setNavOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const { data: sessions, isLoading: sessionsLoading } = useListChatSessions();
+  const createChatSession = useCreateChatSession();
+  const deleteChatSession = useDeleteChatSession();
+  const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
+
+  const createSession = async () => {
+    const session = await createChatSession.mutateAsync(undefined);
+    setActiveSessionId(session.id);
+    queryClient.invalidateQueries({ queryKey: getListChatSessionsQueryKey() });
+    return session;
+  };
+
+  const deleteSession = async (id: number) => {
+    await deleteChatSession.mutateAsync({ sessionId: id });
+    if (activeSessionId === id) setActiveSessionId(null);
+    queryClient.invalidateQueries({ queryKey: getListChatSessionsQueryKey() });
+  };
+
+  const chatHistoryNavigation: ChatHistoryNavigationValue = {
+    sessions,
+    sessionsLoading,
+    activeSessionId,
+    setActiveSessionId,
+    createSession,
+    deleteSession,
+  };
 
   // Auto-close the mobile drawer whenever the route changes.
   useEffect(() => setNavOpen(false), [location]);
 
   return (
-    <MotionConfig reducedMotion="user">
-      <div className="flex h-dvh overflow-hidden bg-background">
+    <ChatHistoryNavigationContext.Provider value={chatHistoryNavigation}>
+      <MotionConfig reducedMotion="user">
+        <div className="flex h-dvh overflow-hidden bg-background">
         <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-card md:flex">
           <div className="flex h-16 shrink-0 items-center border-b border-border px-5 lg:px-6">
             <Brand />
@@ -189,7 +304,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
           <div className="app-stage min-h-0 flex-1 overflow-y-auto">{children}</div>
         </main>
-      </div>
-    </MotionConfig>
+        </div>
+      </MotionConfig>
+    </ChatHistoryNavigationContext.Provider>
   );
 }
