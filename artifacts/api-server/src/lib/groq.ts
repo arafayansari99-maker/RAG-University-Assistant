@@ -125,15 +125,9 @@ export function validateGeneratedAnswer(answer: string, question: string, chunks
   const hasForbiddenNoise = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(clean);
   if (hasForbiddenNoise) return false;
 
-  const hasUsefulText = /\b(policy|requirement|course|document|source|page|student|university|academic|registration|program|graduation|degree|catalog|credit|internship|community|assessment|CGPA|GPA|min\s*4\s*years|max\s*7\s*years|NUST|Computer Science|Bachelor of Science)\b/i.test(clean);
-  if (!hasUsefulText && chunks.length > 0) return false;
-
-  const questionTerms = question.toLowerCase().replace(/[^a-z0-9\s]/g, "").split(/\s+/).filter(Boolean);
-  const overlapScore = questionTerms.filter((term) => clean.toLowerCase().includes(term)).length;
-
-  if (chunks.length > 0 && questionTerms.length >= 2 && overlapScore === 0) {
-    return false;
-  }
+  // The model may answer with a concise paraphrase that does not repeat the
+  // user's exact wording. Retrieval evidence and answer quality checks above
+  // are more reliable than rejecting a response for low lexical overlap.
 
   const chunkDocs = new Set(chunks.map((chunk) => chunk.documentName));
   const answerMentionsDocuments = Array.from(chunkDocs).some((doc) => clean.toLowerCase().includes(doc.toLowerCase().slice(0, 40)));
