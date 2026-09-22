@@ -153,7 +153,8 @@ function NavList({ layoutGroup, collapsed = false }: { layoutGroup: string; coll
                 <div
                   key={session.id}
                   className={cn(
-                    "group flex min-h-10 items-center justify-between gap-2 rounded-md px-3 text-sm transition-colors",
+                    "group flex min-h-10 items-center justify-between gap-2 rounded-md text-sm transition-colors",
+                    collapsed ? "justify-center px-0" : "px-3",
                     activeSessionId === session.id
                       ? "bg-primary text-primary-foreground"
                       : "text-foreground hover:bg-secondary",
@@ -169,7 +170,7 @@ function NavList({ layoutGroup, collapsed = false }: { layoutGroup: string; coll
                     className="min-w-0 flex-1 truncate py-2 text-left font-medium"
                   >
                     <span className={cn(collapsed && "sr-only")}>{session.title || "New Investigation"}</span>
-                    {collapsed && <Library className="mx-auto h-4 w-4 text-primary" />}
+                    {collapsed && <Library className={cn("mx-auto h-4 w-4", activeSessionId === session.id ? "text-primary-foreground" : "text-primary")} />}
                   </button>
                   <button
                     type="button"

@@ -277,22 +277,48 @@
    position: relative;
    isolation: isolate;
    background:
-      radial-gradient(circle at 88% 0%, hsl(var(--primary) / 0.12), transparent 28rem),
+      radial-gradient(circle at 88% 0%, hsl(var(--accent-gold) / 0.16), transparent 28rem),
       linear-gradient(135deg, hsl(var(--background)), hsl(var(--card) / 0.72));
+   overflow: hidden auto;
 }
 
 .app-stage::before {
    content: "";
    position: absolute;
+   inset: -18% -12%;
+   z-index: -1;
+   pointer-events: none;
+   opacity: 0.3;
+   background-image:
+      linear-gradient(hsl(var(--accent-gold) / 0.22) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--primary) / 0.16) 1px, transparent 1px);
+   background-size: 52px 52px;
+   transform: perspective(720px) rotateX(58deg) scale(1.28);
+   transform-origin: 50% 0;
+   mask-image: linear-gradient(to bottom, black 0%, transparent 82%);
+   animation: grid-drift 18s linear infinite;
+}
+
+.app-stage::after {
+   content: "";
+   position: absolute;
    inset: 0;
    z-index: -1;
    pointer-events: none;
-   opacity: 0.38;
-   background-image:
-      linear-gradient(hsl(var(--primary) / 0.06) 1px, transparent 1px),
-      linear-gradient(90deg, hsl(var(--primary) / 0.06) 1px, transparent 1px);
-   background-size: 42px 42px;
-   mask-image: linear-gradient(to bottom right, black, transparent 70%);
+   background:
+      radial-gradient(circle at 18% 12%, hsl(var(--primary) / 0.1), transparent 24rem),
+      radial-gradient(circle at 82% 72%, hsl(var(--accent-gold) / 0.08), transparent 30rem);
+   animation: atmosphere-shift 14s ease-in-out infinite alternate;
+}
+
+@keyframes grid-drift {
+   from { background-position: 0 0; }
+   to { background-position: 52px 52px; }
+}
+
+@keyframes atmosphere-shift {
+   from { opacity: 0.72; transform: scale(1); }
+   to { opacity: 1; transform: scale(1.04); }
 }
 
 .depth-card {
@@ -370,7 +396,7 @@
   }
 
    .app-stage::before {
-      background-size: 28px 28px;
+      background-size: 34px 34px;
    }
 
    .depth-card:hover {
