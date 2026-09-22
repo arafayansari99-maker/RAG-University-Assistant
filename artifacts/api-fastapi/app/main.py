@@ -18,13 +18,14 @@ from .db import close_pool, connection, database_ready, open_pool
 app = FastAPI(title="RAG University Assistant API", version="1.0.0")
 
 origins = [
-    origin.strip()
+    origin.strip().rstrip("/")
     for origin in os.getenv("CORS_ORIGINS", "").split(",")
     if origin.strip()
 ]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins or ["*"],
+    allow_origins=origins,
+    allow_origin_regex=os.getenv("CORS_ORIGIN_REGEX", r"https://[a-zA-Z0-9-]+\.vercel\.app"),
     allow_credentials=bool(origins),
     allow_methods=["*"],
     allow_headers=["*"],

@@ -48,6 +48,7 @@ Add these environment variables to the FastAPI Vercel project:
 | `GROQ_MODEL` | `openai/gpt-oss-20b` |
 | `DB_POOL_MAX` | `5` |
 | `CORS_ORIGINS` | Your frontend Vercel URL |
+| `CORS_ORIGIN_REGEX` | `https://[a-zA-Z0-9-]+\.vercel\.app` for Vercel preview deployments |
 |
 
 After deployment, test:
