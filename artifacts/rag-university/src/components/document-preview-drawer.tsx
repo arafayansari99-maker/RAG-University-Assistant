@@ -56,7 +56,7 @@ function StatusBadge({ status, error }: { status: string; error?: string | null 
       );
     case "processing":
       return (
-        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 gap-1">
+            <Badge variant="outline" className="bg-accent-gold/10 text-accent-gold border-accent-gold/30 gap-1">
           <Clock className="h-3 w-3 animate-spin" /> Processing
         </Badge>
       );

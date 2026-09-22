@@ -404,7 +404,7 @@ export default function DocumentsPage() {
       case "ready":
         return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 gap-1 whitespace-nowrap"><CheckCircle2 className="h-3 w-3" /> Ready</Badge>;
       case "processing":
-        return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 gap-1 whitespace-nowrap"><Clock className="h-3 w-3 animate-spin" /> Processing</Badge>;
+        return <Badge variant="outline" className="bg-accent-gold/10 text-accent-gold border-accent-gold/30 gap-1 whitespace-nowrap"><Clock className="h-3 w-3 animate-spin" /> Processing</Badge>;
       case "error":
         return <Badge variant="destructive" title={error || "Unknown error"} className="gap-1 whitespace-nowrap"><AlertCircle className="h-3 w-3" /> Error</Badge>;
       default:
@@ -465,7 +465,7 @@ export default function DocumentsPage() {
                 <span className="font-medium text-foreground">{totalChunks.toLocaleString()}</span> chunks indexed
               </span>
               {counts.processing > 0 && (
-                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs">{counts.processing} processing</Badge>
+                <Badge variant="outline" className="bg-accent-gold/10 text-accent-gold border-accent-gold/30 text-xs">{counts.processing} processing</Badge>
               )}
               {counts.error > 0 && (
                 <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 text-xs">{counts.error} error{counts.error !== 1 ? "s" : ""}</Badge>

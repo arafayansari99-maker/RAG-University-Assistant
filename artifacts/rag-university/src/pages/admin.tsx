@@ -14,8 +14,8 @@ export default function AdminPage() {
       value: stats?.totalDocuments ?? 0,
       description: "Indexed in knowledge base",
       icon: Files,
-      color: "text-blue-500",
-      bg: "bg-blue-500/10"
+      color: "text-accent-gold",
+      bg: "bg-accent-gold/10"
     },
     {
       title: "Knowledge Chunks",
