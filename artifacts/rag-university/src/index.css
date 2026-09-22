@@ -193,44 +193,42 @@
 
   --opaque-button-border-intensity: 9;
 
-  --background: 222 47% 11%;
-  --foreground: 210 40% 98%;
+  --background: 0 0% 4%;
+  --foreground: 0 0% 96%;
 
-  --border: 217 32% 20%;
+  --border: 0 0% 18%;
 
-  /* Was 222 47% 11% — identical to --background, so every card was flat.
-     Now 4 L-points lighter, a bigger step than light mode's white-on-98%. */
-  --card: 217 33% 15%;
-  --card-foreground: 210 40% 98%;
-  --card-border: 217 32% 22%;
+  --card: 0 0% 8%;
+  --card-foreground: 0 0% 96%;
+  --card-border: 0 0% 20%;
 
-  --sidebar: 222 47% 11%;
-  --sidebar-foreground: 210 40% 98%;
-  --sidebar-border: 217 32% 20%;
+  --sidebar: 0 0% 3%;
+  --sidebar-foreground: 0 0% 96%;
+  --sidebar-border: 0 0% 16%;
   --sidebar-primary: 213 70% 62%;     /* was near-white; brand blue restored */
-  --sidebar-primary-foreground: 222 47% 11%;
-  --sidebar-accent: 217 32% 20%;
-  --sidebar-accent-foreground: 210 40% 98%;
+  --sidebar-primary-foreground: 0 0% 4%;
+  --sidebar-accent: 0 0% 13%;
+  --sidebar-accent-foreground: 0 0% 96%;
   --sidebar-ring: 213 70% 62%;
 
   /* Popovers float above cards, so one more step up. */
-  --popover: 217 33% 17%;
-  --popover-foreground: 210 40% 98%;
-  --popover-border: 217 32% 24%;
+  --popover: 0 0% 11%;
+  --popover-foreground: 0 0% 96%;
+  --popover-border: 0 0% 24%;
 
   /* Was 210 40% 98% — the brand blue became white and "primary" buttons read
      as plain white. 5.9:1 on --background, 5.9:1 against --primary-foreground. */
   --primary: 213 70% 62%;
-  --primary-foreground: 222 47% 11%;
+   --primary-foreground: 0 0% 4%;
 
-  --secondary: 217 32% 20%;
-  --secondary-foreground: 210 40% 98%;
+   --secondary: 0 0% 14%;
+   --secondary-foreground: 0 0% 96%;
 
-  --muted: 217 32% 20%;
-  --muted-foreground: 215 20% 68%;
+   --muted: 0 0% 14%;
+   --muted-foreground: 0 0% 68%;
 
-  --accent: 217 32% 20%;
-  --accent-foreground: 210 40% 98%;
+   --accent: 0 0% 14%;
+   --accent-foreground: 0 0% 96%;
 
   /* Was 0 62.8% 30.6% — only 1.8:1 against --background, so `text-destructive`
      error copy was effectively invisible. Now 3.7:1 as text, 4.8:1 under white. */
@@ -251,7 +249,7 @@
   --elevation-card: 0 1px 2px 0 hsl(222 60% 3% / 0.60), 0 2px 6px -1px hsl(222 60% 3% / 0.45);
   --elevation-float: 0 4px 12px -2px hsl(222 60% 3% / 0.70), 0 16px 32px -8px hsl(222 60% 3% / 0.55);
 
-  --input: 217 32% 22%;
+   --input: 0 0% 20%;
   --ring: 213 70% 62%;
 
   /* Was chart-1 near-white and chart-3/chart-5 at or below --background,
