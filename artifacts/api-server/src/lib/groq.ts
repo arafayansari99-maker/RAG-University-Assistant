@@ -26,20 +26,78 @@ if (!process.env.GROQ_API_KEY) {
 
 export const groq = groqClient;
 
-export const GROQ_MODEL = "openai/gpt-oss-20b";
+const DEFAULT_GROQ_MODEL = "openai/gpt-oss-20b";
+const GROQ_MODEL_CANDIDATES = [
+  process.env.GROQ_MODEL?.trim(),
+  DEFAULT_GROQ_MODEL,
+  "llama-3.3-70b-versatile",
+  "llama-3.1-8b-instant",
+].filter((model, index, models): model is string => Boolean(model) && models.indexOf(model) === index);
+
+export const GROQ_MODEL = GROQ_MODEL_CANDIDATES[0] ?? DEFAULT_GROQ_MODEL;
 export const GROQ_MAX_TOKENS = 1024;
+
+let resolvedModelCache: { model: string; expiresAt: number } | null = null;
+
+async function discoverGroqModel(): Promise<string> {
+  if (!process.env.GROQ_API_KEY || !groq) throw new Error("GROQ_API_KEY is not configured");
+  if (resolvedModelCache && resolvedModelCache.expiresAt > Date.now()) return resolvedModelCache.model;
+
+  const response = await groq.models.list();
+  const availableModels = new Set(
+    (response.data ?? []).map((model: { id: string }) => model.id),
+  );
+  const selectedModel = GROQ_MODEL_CANDIDATES.find((model) => availableModels.has(model));
+
+  if (!selectedModel) {
+    throw new Error(`No configured Groq model is available: ${GROQ_MODEL_CANDIDATES.join(", ")}`);
+  }
+
+  resolvedModelCache = { model: selectedModel, expiresAt: Date.now() + 5 * 60_000 };
+  return selectedModel;
+}
+
+async function resolveGroqModel(): Promise<string> {
+  try {
+    return await discoverGroqModel();
+  } catch (error) {
+    logger.warn({ error: String(error) }, "Groq model discovery failed; using configured model");
+    return GROQ_MODEL;
+  }
+}
+
+export async function getGroqStatus(): Promise<{
+  configured: boolean;
+  reachable: boolean;
+  model: string;
+}> {
+  if (!process.env.GROQ_API_KEY || !groq) {
+    return { configured: false, reachable: false, model: GROQ_MODEL };
+  }
+
+  try {
+    const model = await discoverGroqModel();
+    return { configured: true, reachable: Boolean(model), model };
+  } catch {
+    return { configured: true, reachable: false, model: GROQ_MODEL };
+  }
+}
 
 function fingerprint(value: string): string {
   return createHash("sha256").update(value).digest("hex").slice(0, 16);
 }
 
 export function fallbackAnswerFromChunks(chunks: RetrievedChunk[]): string {
-  return chunks.length > 0
-    ? `I found relevant context for this question, but the local app is currently unable to reach a supported Groq model. Based on the available document excerpts, the answer appears to be supported by the uploaded university materials.\n\nRelevant sources:\n${chunks
-        .slice(0, 3)
-        .map((chunk, index) => `${index + 1}. ${chunk.documentName}${chunk.pageNumber ? ` (Page ${chunk.pageNumber})` : ""}`)
-        .join("\n")}`
-    : "I couldn't find enough relevant university context for this question in the local documents that are currently available in this environment.";
+  if (chunks.length === 0) {
+    return "## Unable to confirm from the uploaded documents\n\nI couldn't find enough relevant university context for this question in the local documents that are currently available in this environment.";
+  }
+
+  const sources = chunks
+    .slice(0, 3)
+    .map((chunk, index) => `${index + 1}. ${chunk.documentName}${chunk.pageNumber ? ` (Page ${chunk.pageNumber})` : ""}`)
+    .join("\n");
+
+  return `## Relevant university context\n\nI found relevant context for this question, but the local app is currently unable to reach a supported Groq model. Based on the available document excerpts, the answer appears to be supported by the uploaded university materials.\n\n### Key points\n\n- Use the most relevant excerpt from the uploaded university materials.\n- Cross-check the answer against the document title and page references.\n- Keep the final response concise, professional, and evidence-based.\n\n### Sources\n${sources}`;
 }
 
 export function cleanStreamingFragment(content: string): string {
@@ -48,14 +106,8 @@ export function cleanStreamingFragment(content: string): string {
     .replace(/<[^>]+>/g, "")
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
-    .replace(/[\u0000-\u001F\u007F]/g, "")
-    .replace(/\*\*/g, "")
-    .replace(/\*/g, "")
-    .replace(/`/g, "")
-    .replace(/\[source\s*\d+\]|\[Sources?\]/gi, "Sources")
-    .replace(/^\s*[-*]\s+/gm, "  • ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
+    .replace(/\[source\s*\d+\]|\[Sources?\]/gi, "Sources");
 }
 
 export function answerFromPipeTable(answer: string): string | null {
@@ -145,30 +197,31 @@ export function buildSystemPrompt(): string {
 Answer using ONLY the retrieved university document context. Never invent requirements, policies, programme details, page numbers, credit hours, or source names.
 
 Required answer style for this project:
-- Write a short, professional academic answer in plain paragraphs.
-- Use a single clear heading only when the question asks for a requirement list, programme summary, or policy explanation.
-- The heading must be plain text, not markdown bold, and must be visually separated from the answer body.
-- Use the bullet symbol • or numbered lists only; never start a list item with a hyphen.
-- Restrict the use of markdown symbols. Do not output raw markdown tables, HTML, <br>, pipe-delimited tables, asterisks for headings, or special characters.
-- Do not include developer notes, formatting artifacts, or placeholders.
-- Use a proper heading for the answer, then a paragraph, then a bullet list if needed.
+- Use clean markdown formatting with headings, paragraphs, numbered lists, and bullet lists when needed.
+- Keep the response professional, concise, and easy to read.
+- Use short paragraphs, not long blocks of dense prose.
+- Use headings and subheadings for structure, especially for policy, requirement, and academic-process questions.
+- Use markdown lists instead of flat paragraphs when explaining multiple requirements or steps.
+- Keep explanations fact-based and sourced directly from the university documents.
+- Use plain language and proper sentence structure.
 - End the answer with a compact Sources section listing the source document and page range that supports the answer.
 - If the context is insufficient, say exactly: "I couldn't find enough information in the university documents to answer confidently."
 
 Good project-specific response shape:
-Graduation Requirements for the Bachelor of Science in Computer Science (BS CS) at NUST
+## Graduation Requirements for the Bachelor of Science in Computer Science (BS CS) at NUST
 
 The BS CS programme requires 133 credit hours, a four-year minimum study window, and mandatory internship and community service completion. Students are expected to satisfy all required assessments and pass all required courses.
 
-  • Total credit hours: 133 CHs.
-  • Programme duration: minimum 4 years, maximum 7 years.
-  • Internship: mandatory 3-CH internship of at least 6 weeks.
-  • Community service: mandatory 2-CH course.
-  • Assessment: required courses, examinations, quizzes, assignments, lab tests, and projects.
+### Requirements
+1. Total credit hours: 133 CHs.
+2. Programme duration: minimum 4 years, maximum 7 years.
+3. Internship: mandatory 3-CH internship of at least 6 weeks.
+4. Community service: mandatory 2-CH course.
+5. Assessment: required courses, examinations, quizzes, assignments, lab tests, and projects.
 
 No minimum CGPA is stated in the handbook; the handbook only lists the completion obligations above.
 
-Sources:
+### Sources
 1. Revised-Undergraduate-Handbook.pdf, pages 1-3.
 `;
 }
@@ -254,9 +307,11 @@ export async function streamAnswer(opts: StreamChatOptions): Promise<void> {
     { role: "user", content: buildUserPrompt(question, chunks) },
   ];
 
+  const selectedModel = await resolveGroqModel();
+
   logger.info(
     {
-      model: GROQ_MODEL,
+      model: selectedModel,
       maxTokens: GROQ_MAX_TOKENS,
       stream: true,
       messageCount: messages.length,
@@ -276,7 +331,7 @@ export async function streamAnswer(opts: StreamChatOptions): Promise<void> {
 
   try {
     const stream = await groq.chat.completions.create({
-      model: GROQ_MODEL,
+      model: selectedModel,
       messages,
       max_tokens: GROQ_MAX_TOKENS,
       stream: true,

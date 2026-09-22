@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { 
   useGetChatHistory,
   useSubmitFeedback,
@@ -139,12 +141,26 @@ export default function ChatPage() {
   // Mutations
   const submitFeedback = useSubmitFeedback();
 
-  // Scroll to bottom when history changes or streaming updates
+  // Keep live output visible, then let the completed response settle before
+  // smoothly moving the viewport to its end.
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const scrollContainer = scrollRef.current;
+    if (!scrollContainer) return;
+
+    if (isStreaming) {
+      scrollContainer.scrollTop = scrollContainer.scrollHeight;
+      return;
     }
-  }, [displayHistory, streamingContent]);
+
+    const timeoutId = window.setTimeout(() => {
+      scrollContainer.scrollTo({
+        top: scrollContainer.scrollHeight,
+        behavior: "smooth",
+      });
+    }, 220);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [displayHistory, isStreaming, streamingContent]);
 
   const handleDeleteActiveChat = () => {
     if (!activeSessionId) return;
@@ -152,129 +168,17 @@ export default function ChatPage() {
   };
 
   const renderMessageBody = (role: "user" | "assistant", content: string) => {
-    const clean = String(content || "")
-      .replace(/<br\s*\/?>/gi, "\n")
-      .replace(/<[^>]+>/g, "")
-      .replace(/\*\*/g, "")
-      .replace(/\*/g, "")
-      .replace(/`/g, "")
-      .replace(/\[source\s*\d+\]|\[Sources?\]/gi, "Sources")
-      .replace(/\r\n/g, "\n")
-      .replace(/\r/g, "\n")
-      .replace(/^\s*[-*]\s+/gm, "  • ")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
-
-    const lines = clean.split("\n");
+    const clean = String(content || "").trim();
 
     if (role === "assistant") {
-      const output: React.ReactNode[] = [];
-      const isHeadingLine = (line: string, lineIndex: number) => {
-        const normalized = line.trim().replace(/^#{1,6}\s+/, "").replace(/^[-•]\s+/, "");
-        const nextLine = lines.slice(lineIndex + 1).find((candidate) => candidate.trim());
-        return Boolean(
-          normalized &&
-          normalized.length <= 90 &&
-          normalized.split(/\s+/).length <= 12 &&
-          !/[.!?]$/.test(normalized) &&
-          (/^#{1,6}\s+/.test(line.trim()) ||
-            /^[-•]\s+[^:]+$/.test(line.trim()) ||
-            /:$/.test(line.trim())) &&
-          (!nextLine || !/^[-•]\s+/.test(nextLine.trim()) || /^[-•]\s+[^:]+$/.test(line.trim()))
-        );
-      };
-      let index = 0;
-
-      while (index < lines.length) {
-        const line = lines[index];
-        const trimmed = line.trim();
-
-        if (trimmed.includes("|") && trimmed.split("|").length >= 3) {
-          const tableLines: string[] = [];
-          let end = index;
-          while (end < lines.length) {
-            const candidate = lines[end].trim();
-            if (!candidate.includes("|") || candidate.split("|").length < 3) break;
-            tableLines.push(candidate);
-            end += 1;
-          }
-
-          const parsed = tableLines
-            .map((tableLine) => tableLine.replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim()))
-            .filter((row) => row.length >= 2 && !/^(-+:?-+$)|^[-: ]+$/.test(row.join(" ")));
-
-          if (parsed.length >= 2) {
-            const header = parsed[0];
-            const rows = parsed.slice(1);
-            output.push(
-              <table key={`table-${index}`} className="min-w-full border-collapse text-sm my-4 table-auto text-foreground">
-                <thead>
-                  <tr>
-                    {header.map((cell, cellIndex) => (
-                      <th key={cellIndex} className="border border-border bg-muted px-3 py-2 text-center font-black text-foreground align-middle">{cell}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row, rowIndex) => (
-                    <tr key={rowIndex}>
-                      {row.map((cell, cellIndex) => (
-                        <td key={cellIndex} className="border border-border px-3 py-2 align-middle text-center text-foreground">{cell}</td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            );
-            index = end;
-            continue;
-          }
-        }
-
-        const trimmedLine = line.trim();
-        if (!trimmedLine) {
-          output.push(<div key={`empty-${index}`} className="h-3" />);
-          index += 1;
-          continue;
-        }
-
-        if (index === 0 || isHeadingLine(line, index)) {
-          const heading = trimmedLine.replace(/^#{1,6}\s+/, "").replace(/^[-•]\s+/, "").replace(/:$/, "");
-          output.push(
-            <div key={index} className={cn(
-              "font-black text-primary leading-tight tracking-tight",
-              index === 0 ? "text-2xl" : "mt-4 text-lg md:text-xl",
-            )}>
-              {heading}
-            </div>,
-          );
-        } else if (/^Sources:/i.test(trimmedLine)) {
-          output.push(<div key={index} className="mt-4 text-sm font-black text-primary uppercase tracking-wide">{trimmedLine}</div>);
-        } else if (/^Follow-up:/i.test(trimmedLine)) {
-          const followUp = trimmedLine.replace(/^Follow-up:\s*/i, "");
-          output.push(
-            <button
-              key={index}
-              type="button"
-              onClick={() => setInput(followUp)}
-              className="mt-4 w-full rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-left text-sm font-medium text-primary transition-colors hover:border-primary/40 hover:bg-primary/10"
-            >
-              {followUp}
-            </button>,
-          );
-        } else if (/^\s*•\s*/.test(trimmedLine)) {
-          output.push(<div key={index} className="ml-4 text-sm leading-7">{trimmedLine}</div>);
-        } else {
-          output.push(<div key={index} className="text-sm leading-7">{trimmedLine}</div>);
-        }
-
-        index += 1;
-      }
-
-      return <div className="whitespace-pre-wrap leading-7">{output}</div>;
+      return (
+        <div className="prose prose-sm max-w-none text-sm leading-7 text-foreground dark:prose-invert prose-headings:font-black prose-headings:tracking-tight prose-headings:text-primary prose-p:my-2 prose-ul:my-3 prose-ul:pl-6 prose-ol:my-3 prose-ol:pl-6 prose-li:my-1 prose-table:my-4 prose-th:border prose-th:border-border prose-th:bg-muted prose-th:px-3 prose-th:py-2 prose-th:text-center prose-th:text-foreground prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-2 prose-td:text-center prose-td:text-foreground prose-strong:text-foreground prose-em:text-foreground">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{clean}</ReactMarkdown>
+        </div>
+      );
     }
 
-    return <span className="whitespace-pre-wrap">{clean}</span>;
+    return <span className="whitespace-pre-wrap leading-7">{clean}</span>;
   };
 
   const handleSend = async () => {
@@ -565,7 +469,13 @@ ${msgHtml}
           ) : (
             <div className="max-w-4xl mx-auto space-y-8 pb-8">
               {displayHistory.map((msg) => (
-                <div key={msg.id} className={`flex gap-4 ${msg.role === 'assistant' ? '' : 'flex-row-reverse'}`}>
+                <motion.div
+                  key={msg.id}
+                  initial={{ opacity: 0, y: -18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.42, ease: "easeOut" }}
+                  className={`flex gap-4 ${msg.role === 'assistant' ? '' : 'flex-row-reverse'}`}
+                >
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
                     msg.role === 'assistant' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'
                   }`}>
@@ -644,7 +554,7 @@ ${msgHtml}
                       </div>
                     )}
                   </div>
-                </div>
+                </motion.div>
               ))}
 
               {isStreaming && (
