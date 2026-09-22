@@ -493,7 +493,7 @@ ${msgHtml}
                     {msg.role === 'assistant' ? <Library className="h-4 w-4" /> : <div className="font-medium text-xs">Me</div>}
                   </div>
                   <div className={`flex-1 max-w-[85%] ${msg.role === 'assistant' ? '' : 'flex flex-col items-end'}`}>
-                    <div className={`depth-card prose prose-sm rounded-2xl md:prose-base dark:prose-invert max-w-none ${
+                    <div className={`prose prose-sm rounded-2xl md:prose-base dark:prose-invert max-w-none ${
                       msg.role === 'user' ? 'bg-secondary px-5 py-3 rounded-2xl rounded-tr-sm text-foreground inline-block' : 'text-foreground'
                     }`}>
                       {renderMessageBody(msg.role, msg.content)}
