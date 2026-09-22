@@ -4,6 +4,15 @@
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
 
+* {
+   scrollbar-width: none;
+   -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+   display: none;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 /* All color tokens below are bare `H S% L%` triplets consumed as hsl(var(--x)).
