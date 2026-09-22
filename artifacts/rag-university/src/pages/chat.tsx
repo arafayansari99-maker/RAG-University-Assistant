@@ -30,6 +30,7 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
+  const [streamingError, setStreamingError] = useState<string | null>(null);
   const [streamingSources, setStreamingSources] = useState<Citation[]>([]);
   const [streamingConfidence, setStreamingConfidence] = useState<number | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -219,6 +220,7 @@ export default function ChatPage() {
     setInput("");
     setIsStreaming(true);
     setStreamingContent("");
+    setStreamingError(null);
     setStreamingSources([]);
     setStreamingConfidence(null);
     setLastQuestion(questionText);
@@ -269,6 +271,7 @@ export default function ChatPage() {
             try {
               const data = JSON.parse(dataStr);
               if (data.content) setStreamingContent(prev => prev + data.content);
+              if (data.error) setStreamingError(data.error);
               if (data.sources) setStreamingSources(data.sources);
               if (data.confidence !== undefined) setStreamingConfidence(data.confidence);
               if (data.done) {
@@ -572,7 +575,11 @@ ${msgHtml}
                   </div>
                   <div className="flex-1 max-w-[85%]">
                     <div className="prose prose-sm md:prose-base dark:prose-invert max-w-none text-foreground">
-                      {streamingContent ? renderMessageBody("assistant", streamingContent) : (
+                      {streamingError ? (
+                        <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                          {streamingError}
+                        </div>
+                      ) : streamingContent ? renderMessageBody("assistant", streamingContent) : (
                         <span className="flex gap-1 py-2">
                           <span className="w-1.5 h-1.5 bg-primary/50 rounded-full animate-bounce"></span>
                           <span className="w-1.5 h-1.5 bg-primary/50 rounded-full animate-bounce [animation-delay:0.2s]"></span>

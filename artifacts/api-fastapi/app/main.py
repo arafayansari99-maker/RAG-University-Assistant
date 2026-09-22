@@ -270,7 +270,10 @@ def sse(payload: dict[str, Any]) -> str:
 
 @app.get("/api/healthz")
 def health() -> dict[str, str]:
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "groqConfigured": "true" if bool(os.getenv("GROQ_API_KEY", "").strip()) else "false",
+    }
 
 
 @app.get("/api/chat/sessions")
@@ -346,26 +349,25 @@ def ask(request: AskQuestion) -> StreamingResponse:
         yield sse({"sessionId": session_id}) if request.sessionId is None else ""
         answer = ""
         try:
-            api_key = os.getenv("GROQ_API_KEY")
-            if api_key:
-                client = Groq(api_key=api_key)
-                messages = [{"role": "system", "content": system_prompt()}]
-                messages.extend({"role": row["role"], "content": row["content"]} for row in history[-6:])
-                messages.append({"role": "user", "content": user_prompt(question, chunks, confirmation)})
-                response = client.chat.completions.create(
-                    model=os.getenv("GROQ_MODEL", "openai/gpt-oss-20b"),
-                    messages=messages,
-                    max_tokens=1024,
-                    stream=True,
-                )
-                for part in response:
-                    content = part.choices[0].delta.content if part.choices else ""
-                    if content:
-                        answer += content
-                        yield sse({"content": content})
-            else:
-                answer = fallback(chunks)
-                yield sse({"content": answer})
+            api_key = os.getenv("GROQ_API_KEY", "").strip()
+            if not api_key:
+                raise RuntimeError("GROQ_API_KEY is not configured for this deployment")
+
+            client = Groq(api_key=api_key)
+            messages = [{"role": "system", "content": system_prompt()}]
+            messages.extend({"role": row["role"], "content": row["content"]} for row in history[-6:])
+            messages.append({"role": "user", "content": user_prompt(question, chunks, confirmation)})
+            response = client.chat.completions.create(
+                model=os.getenv("GROQ_MODEL", "openai/gpt-oss-20b"),
+                messages=messages,
+                max_tokens=1024,
+                stream=True,
+            )
+            for part in response:
+                content = part.choices[0].delta.content if part.choices else ""
+                if content:
+                    answer += content
+                    yield sse({"content": content})
 
             answer = normalize_answer(answer) or fallback(chunks)
             score = confidence(chunks, answer)

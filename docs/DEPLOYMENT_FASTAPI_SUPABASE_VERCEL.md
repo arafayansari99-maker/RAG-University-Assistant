@@ -51,6 +51,8 @@ Add these environment variables to the FastAPI Vercel project:
 | `CORS_ORIGIN_REGEX` | `https://[a-zA-Z0-9-]+\.vercel\.app` for Vercel preview deployments |
 |
 
+Set `GROQ_API_KEY` for the **Production** environment and redeploy after saving it. If it is missing, `/api/healthz` returns `groqConfigured: "false"` and chat displays a configuration error instead of silently returning a non-LLM fallback answer.
+
 After deployment, test:
 
 ```text
