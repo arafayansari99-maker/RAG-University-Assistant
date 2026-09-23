@@ -217,15 +217,20 @@ def retrieve(question: str, limit: int = 5) -> list[dict[str, Any]]:
 
 def system_prompt() -> str:
     return (
-        "You are Athena RAG, a university knowledge assistant. "
-        "Answer using ONLY the retrieved university document context. "
-        "Never invent requirements, policies, page numbers, or sources. "
-        "Use concise professional academic prose, clean bullets when useful. "
-        "Use the bullet symbol • or numbered lists; never start a list item with a hyphen. "
-        "finish with a Sources section, and end with exactly one line in this format: "
-        "Follow-up: Would you like to know [one relevant next topic] as well? "
-        "If the user replies with an affirmative confirmation, answer the topic from the previous Follow-up line. "
-        "If context is insufficient, say: "
+        "You are Athena RAG, a university knowledge assistant for NUST documentation.\n\n"
+        "Answer using ONLY the retrieved university document context. Never invent requirements, "
+        "policies, programme details, page numbers, credit hours, or source names.\n\n"
+        "Required answer style:\n"
+        "- Use clean GitHub-Flavored Markdown.\n"
+        "- Start with a descriptive ## heading.\n"
+        "- Use short paragraphs and ### subheadings where helpful.\n"
+        "- Use numbered lists for ordered requirements or steps.\n"
+        "- Use bullet lists for grouped points.\n"
+        "- Use a Markdown table when comparing multiple requirements or values.\n"
+        "- Keep proper spaces, punctuation, indentation, and complete sentences.\n"
+        "- End with a compact ### Sources section listing the supporting document and page.\n"
+        "- Do not use raw HTML, bullet symbols, or a Follow-up line.\n\n"
+        "If context is insufficient, say exactly: "
         'I couldn\'t find enough information in the university documents to answer confidently.'
     )
 
@@ -246,16 +251,23 @@ def user_prompt(question: str, chunks: list[dict[str, Any]], confirmation: bool 
 
 def fallback(chunks: list[dict[str, Any]]) -> str:
     if not chunks:
-        return "I couldn't find enough information in the university documents to answer confidently."
+        return "## Unable to confirm from the uploaded documents\n\nI couldn't find enough information in the university documents to answer confidently."
     sources = "\n".join(
         f"{index}. {item['documentName']}" + (f" (Page {item['pageNumber']})" if item["pageNumber"] else "")
         for index, item in enumerate(chunks[:3], 1)
     )
-    return f"I found relevant context in the uploaded university documents, but the language model is unavailable.\n\nSources:\n{sources}"
+    return (
+        "## Relevant university context\n\n"
+        "I found relevant context in the uploaded university documents, but the language model is unavailable.\n\n"
+        "### Sources\n"
+        f"{sources}"
+    )
 
 
 def normalize_answer(answer: str) -> str:
-    return re.sub(r"(?m)^\s*[-*]\s+", "  • ", answer).strip()
+    normalized = answer.replace("\r\n", "\n").replace("\r", "\n")
+    normalized = re.sub(r"\n{3,}", "\n\n", normalized)
+    return normalized.strip()
 
 
 def confidence(chunks: list[dict[str, Any]], answer: str) -> float:
