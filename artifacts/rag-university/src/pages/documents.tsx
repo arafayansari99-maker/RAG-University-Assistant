@@ -40,6 +40,7 @@ const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
 ];
 
 const ALLOWED_EXT = [".pdf", ".docx", ".txt"];
+const VERCEL_SAFE_UPLOAD_LIMIT = 4 * 1024 * 1024;
 const ALLOWED_MIME = [
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -65,6 +66,10 @@ function getMimeLabel(mime: string) {
   if (mime.includes("wordprocessingml")) return "DOCX";
   if (mime.startsWith("text/")) return "TXT";
   return mime.split("/")[1]?.toUpperCase() ?? "FILE";
+}
+
+function isVercelApi() {
+  return apiBaseUrl.includes(".vercel.app");
 }
 
 // ─── Upload Queue Panel ───────────────────────────────────────────────────────
@@ -222,9 +227,22 @@ export default function DocumentsPage() {
       status: "pending",
     }));
 
-    setQueue((prev) => [...prev, ...newItems]);
+    const uploadLimit = isVercelApi() ? VERCEL_SAFE_UPLOAD_LIMIT : 20 * 1024 * 1024;
+    const oversized = newItems.filter((item) => item.size > uploadLimit);
+    if (oversized.length > 0) {
+      const limitLabel = isVercelApi() ? "4 MB on the live Vercel deployment" : "20 MB";
+      setQueue((prev) => [
+        ...prev,
+        ...oversized.map((item) => ({ ...item, status: "error" as const, error: `This file is too large. The limit is ${limitLabel} because Vercel limits upload requests to 4.5 MB.` })),
+      ]);
+    }
 
-    for (const item of newItems) {
+    const uploadableItems = newItems.filter((item) => item.size <= uploadLimit);
+    if (uploadableItems.length === 0) return;
+
+    setQueue((prev) => [...prev, ...uploadableItems]);
+
+    for (const item of uploadableItems) {
       setQueue((prev) => prev.map((q) => q.id === item.id ? { ...q, status: "uploading" } : q));
 
       const formData = new FormData();
@@ -247,8 +265,12 @@ export default function DocumentsPage() {
           throw new Error(message || `Upload failed (HTTP ${res.status})`);
         }
         const uploaded = await res.json() as { suggestedQuestions?: string[] };
-        if (uploaded.suggestedQuestions?.length) {
-          localStorage.setItem("athena-suggested-questions", JSON.stringify(uploaded.suggestedQuestions.slice(0, 4)));
+        const suggestedQuestions = uploaded.suggestedQuestions?.filter(Boolean).slice(0, 4) ?? [];
+        if (suggestedQuestions.length > 0) {
+          localStorage.setItem("athena-suggested-questions", JSON.stringify(suggestedQuestions));
+          window.dispatchEvent(new Event("athena-suggested-questions-updated"));
+        } else {
+          await refreshSuggestedQuestions();
         }
         setQueue((prev) => prev.map((q) => q.id === item.id ? { ...q, status: "done" } : q));
         queryClient.invalidateQueries({ queryKey: getListDocumentsQueryKey() });

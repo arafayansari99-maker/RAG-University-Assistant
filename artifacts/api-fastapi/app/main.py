@@ -123,30 +123,42 @@ def chunk_text(text: str, page: int | None) -> list[tuple[int | None, str]]:
 
 
 def suggested_questions(text: str, filename: str) -> list[str]:
-    clean_text = re.sub(r"\s+", " ", text.replace("\x00", " ")).strip()
-    headings = [
-        line.strip(" -:#")
-        for line in text.splitlines()
-        if 3 <= len(line.strip()) <= 90
-        and not line.strip().endswith((".", ",", ";"))
-        and len(line.split()) <= 12
+    clean_text = text.replace("\x00", " ")
+    normalized_text = re.sub(r"\s+", " ", clean_text).strip()
+    lines = [re.sub(r"\s+", " ", line).strip(" -:#\t") for line in clean_text.splitlines()]
+    candidates = [
+        line for line in lines
+        if 3 <= len(line) <= 90
+        and 1 < len(line.split()) <= 12
+        and not line.endswith((".", ",", ";", ":"))
+        and not re.fullmatch(r"[\d\W]+", line)
     ]
+    sentences = re.split(r"(?<=[.!?])\s+", normalized_text)
+    candidates.extend(
+        sentence.strip(" .")
+        for sentence in sentences
+        if 5 <= len(sentence.split()) <= 14
+    )
+
     topics: list[str] = []
-    for topic in headings + re.findall(r"[A-Z][A-Za-z0-9 &'/-]{3,90}", clean_text):
-        normalized = re.sub(r"\s+", " ", topic).strip()
-        if normalized and normalized.lower() not in {item.lower() for item in topics}:
-            topics.append(normalized)
-    if not topics:
-        sentences = re.split(r"(?<=[.!?])\s+", clean_text)
-        topics = [sentence[:100].strip(" .") for sentence in sentences if len(sentence.split()) >= 5]
+    seen: set[str] = set()
+    for candidate in candidates:
+        topic = re.sub(r"\s+", " ", candidate).strip()
+        key = topic.casefold()
+        if key not in seen and len(topic) >= 8:
+            seen.add(key)
+            topics.append(topic)
+        if len(topics) >= 8:
+            break
+
     stem = re.sub(r"[_-]+", " ", filename.rsplit(".", 1)[0]).strip() or "this document"
     templates = [
-        "What are the key concepts covered in {topic}?",
-        "What requirements or rules are described for {topic}?",
-        "How does the document explain {topic}?",
-        "What practical examples or steps are provided for {topic}?",
+        "What are the key requirements related to {topic}?",
+        "What rules or procedures does the document describe for {topic}?",
+        "What should a student know about {topic}?",
+        "What steps or conditions are associated with {topic}?",
     ]
-    questions = [template.format(topic=topic) for template, topic in zip(templates, topics[:4])]
+    questions = [template.format(topic=topic) for template, topic in zip(templates, topics)]
     while len(questions) < 4:
         questions.append(f"What should I know about {stem}?")
     return list(dict.fromkeys(questions))[:4]
@@ -450,8 +462,11 @@ def list_documents() -> list[dict[str, Any]]:
 def upload_document(file: UploadFile = File(...)) -> dict[str, Any]:
     data = file.file.read()
     filename = file.filename or "upload.txt"
-    if len(data) > 20 * 1024 * 1024:
-        raise HTTPException(413, "File size must be 20 MB or less")
+    if len(data) > 4 * 1024 * 1024:
+        raise HTTPException(
+            413,
+            "File is too large for the Vercel deployment. Upload a file smaller than 4 MB, or configure the frontend to use the Fly/Express API for larger files.",
+        )
     try:
         pages = extract_document(filename, data)
         chunks = [item for page, text in pages for item in chunk_text(text, page)]

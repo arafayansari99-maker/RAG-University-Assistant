@@ -10,7 +10,7 @@ Supabase:        PostgreSQL database
 
 The FastAPI backend preserves the existing frontend API paths and SSE chat response contract.
 
-Vercel serverless functions have platform request-size and execution limits. Keep uploaded PDFs comfortably below the current Vercel limit; larger institutional files need direct object storage or a persistent API host.
+Vercel serverless functions have a 4.5 MB request-body limit. The frontend therefore limits uploads to 4 MB when `VITE_API_BASE` points to a Vercel API. Larger institutional PDFs must use the Express API on Fly/Replit, direct object storage uploads, or another persistent API host.
 
 ## 1. Prepare Supabase
 
