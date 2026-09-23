@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { 
@@ -129,7 +129,12 @@ export default function ChatPage() {
     return history ?? [];
   }, [history]);
 
-  useEffect(() => {
+  const streamedResponseIsPersisted = useMemo(
+    () => Boolean(streamingContent && displayHistory.some((message) => message.role === "assistant" && message.content === streamingContent)),
+    [displayHistory, streamingContent],
+  );
+
+  const loadSuggestedQuestions = useCallback(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("athena-suggested-questions") ?? "[]");
       if (Array.isArray(saved)) setSuggestedQuestions(saved.filter((item): item is string => typeof item === "string").slice(0, 4));
@@ -137,6 +142,12 @@ export default function ChatPage() {
       setSuggestedQuestions([]);
     }
   }, []);
+
+  useEffect(() => {
+    loadSuggestedQuestions();
+    window.addEventListener("athena-suggested-questions-updated", loadSuggestedQuestions);
+    return () => window.removeEventListener("athena-suggested-questions-updated", loadSuggestedQuestions);
+  }, [loadSuggestedQuestions]);
 
   // Mutations
   const submitFeedback = useSubmitFeedback();
@@ -172,7 +183,7 @@ export default function ChatPage() {
 
     if (role === "assistant") {
       return (
-        <div className="prose prose-sm max-w-none text-sm leading-7 text-foreground dark:prose-invert prose-headings:font-black prose-headings:tracking-tight prose-headings:text-primary prose-p:my-2 prose-ul:my-3 prose-ul:pl-6 prose-ol:my-3 prose-ol:pl-6 prose-li:my-1 prose-table:my-4 prose-th:border prose-th:border-border prose-th:bg-muted prose-th:px-3 prose-th:py-2 prose-th:text-center prose-th:text-foreground prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-2 prose-td:text-center prose-td:text-foreground prose-strong:text-foreground prose-em:text-foreground">
+        <div className="prose prose-sm max-w-none text-sm leading-7 text-foreground dark:prose-invert prose-headings:font-black prose-headings:tracking-tight prose-headings:text-primary prose-p:my-2 prose-ul:my-3 prose-ul:pl-6 prose-ol:my-3 prose-ol:pl-6 prose-li:my-1 prose-table:my-4 prose-table:block prose-table:w-full prose-table:overflow-x-auto prose-th:border prose-th:border-border prose-th:bg-muted prose-th:px-3 prose-th:py-2 prose-th:text-center prose-th:text-foreground prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-2 prose-td:text-center prose-td:text-foreground prose-strong:text-foreground prose-em:text-foreground">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{clean}</ReactMarkdown>
         </div>
       );
@@ -471,9 +482,7 @@ ${msgHtml}
               {displayHistory.map((msg) => (
                 <motion.div
                   key={msg.id}
-                  initial={{ opacity: 0, y: -18 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.42, ease: "easeOut" }}
+                  initial={false}
                   className={`flex gap-4 ${msg.role === 'assistant' ? '' : 'flex-row-reverse'}`}
                 >
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
@@ -557,7 +566,7 @@ ${msgHtml}
                 </motion.div>
               ))}
 
-              {isStreaming && (
+              {(isStreaming || (streamingContent && !streamedResponseIsPersisted)) && (
                 <div className="flex gap-4">
                   <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0">
                     <Library className="h-4 w-4" />

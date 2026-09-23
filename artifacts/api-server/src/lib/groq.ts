@@ -202,6 +202,8 @@ Required answer style for this project:
 - Use short paragraphs, not long blocks of dense prose.
 - Use headings and subheadings for structure, especially for policy, requirement, and academic-process questions.
 - Use markdown lists instead of flat paragraphs when explaining multiple requirements or steps.
+- Use a valid GitHub-Flavored Markdown table when comparing multiple requirements or values: include a header row, a separator row made of pipe characters and dashes, and one row per item.
+- Keep table cells concise and do not place unescaped pipe characters inside cell text.
 - Keep explanations fact-based and sourced directly from the university documents.
 - Use plain language and proper sentence structure.
 - End the answer with a compact Sources section listing the source document and page range that supports the answer.

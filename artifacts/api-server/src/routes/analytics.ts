@@ -118,16 +118,14 @@ router.get("/analytics/top-questions", async (_req, res): Promise<void> => {
 
 // GET /analytics/suggested-questions
 router.get("/analytics/suggested-questions", async (_req, res): Promise<void> => {
-  res.json([
-    "What is the minimum CGPA required for Final Year Project registration?",
-    "What is the attendance requirement for each course?",
-    "How do I apply for a scholarship?",
-    "What is the fee structure for the upcoming semester?",
-    "What are the academic calendar dates?",
-    "How do I register for courses?",
-    "What is the grading policy?",
-    "What are the admission requirements for graduate programs?",
-  ]);
+  try {
+    const names = !process.env.DATABASE_URL
+      ? (await devDb.listDocumentsDev()).filter((document: any) => document.status === "ready").map((document: any) => document.originalName)
+      : (await db.select({ name: documentsTable.originalName }).from(documentsTable).where(eq(documentsTable.status, "ready"))).map((document) => document.name);
+    res.json(names.slice(0, 4).map((name: string) => `What are the key requirements and rules in ${name}?`));
+  } catch {
+    res.json([]);
+  }
 });
 
 export default router;

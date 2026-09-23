@@ -513,6 +513,15 @@ def delete_document(document_id: int) -> None:
         raise HTTPException(404, "Document not found")
 
 
+@app.get("/api/analytics/suggested-questions")
+def suggested_document_questions() -> list[str]:
+    with connection() as conn:
+        rows = conn.execute(
+            "SELECT original_name FROM documents WHERE status = 'ready' ORDER BY created_at DESC LIMIT 4"
+        ).fetchall()
+    return [f"What are the key requirements and rules in {row['original_name']}?" for row in rows]
+
+
 @app.post("/api/documents/rebuild-index")
 def rebuild_index() -> dict[str, Any]:
     with connection() as conn:

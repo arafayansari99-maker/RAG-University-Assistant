@@ -164,6 +164,18 @@ export default function DocumentsPage() {
   const deleteDoc = useDeleteDocument();
   const rebuildIndex = useRebuildIndex();
 
+  const refreshSuggestedQuestions = useCallback(async () => {
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/analytics/suggested-questions`);
+      if (!response.ok) return;
+      const questions = await response.json() as string[];
+      localStorage.setItem("athena-suggested-questions", JSON.stringify(questions.slice(0, 4)));
+      window.dispatchEvent(new Event("athena-suggested-questions-updated"));
+    } catch {
+      // Keep the current suggestions if the refresh endpoint is temporarily unavailable.
+    }
+  }, []);
+
   const filtered = useMemo(() => {
     if (!documents) return [];
     return documents.filter((doc) => {
@@ -357,6 +369,7 @@ export default function DocumentsPage() {
       onSuccess: () => {
         setSelectedIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
         toast({ title: "Document deleted" });
+        void refreshSuggestedQuestions();
         queryClient.invalidateQueries({ queryKey: getListDocumentsQueryKey() });
       },
     });
@@ -380,6 +393,7 @@ export default function DocumentsPage() {
     }
     setIsBulkDeleting(false);
     clearSelection();
+    void refreshSuggestedQuestions();
     queryClient.invalidateQueries({ queryKey: getListDocumentsQueryKey() });
     toast({
       title: failed === 0
