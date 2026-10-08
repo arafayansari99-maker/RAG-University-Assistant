@@ -287,6 +287,31 @@ VITE_API_BASE=https://your-api-url pnpm run build
 - **Monorepo Architecture**: PNPM workspaces for scalable multi-package projects
 - **Table Rendering**: Smart HTML table generation from markdown/pipe-delimited data
 
+## 📈 Project Outcomes, Learnings & Next Steps
+
+### What the project delivers
+
+- Ingests **3 document formats**: PDF, DOCX, and TXT.
+- Provides **2 API implementations** (Express and FastAPI) behind a React and TypeScript frontend.
+- Streams answers with document citations, and includes chat sessions, document management, feedback, and admin insights.
+- The Express chat flow retrieves **5 chunks per question** and caps generated answers at **1,024 tokens**. Empty chats offer **4 suggested questions**.
+- The repository's RAG contract evaluation currently passes **12 of 12 checks**. These are source-contract checks, not a measurement of answer accuracy.
+
+### What this project demonstrates
+
+- How document extraction and chunking feed a retrieval-augmented generation workflow.
+- How to connect retrieval and LLM generation to a streaming chat interface with citations.
+- How to structure a frontend and multiple API implementations in a PNPM workspace.
+- How deployment configuration affects static assets: the favicon uses Vite's base URL so it works when the app is served below the domain root.
+
+### Current limitations and optimization opportunities
+
+- **Retrieval quality is not benchmarked.** The current 12 checks verify important source and API contracts, but there is no representative question-and-answer evaluation set or measured retrieval/answer quality score. Build a reviewed benchmark and track retrieval relevance and answer faithfulness before tuning.
+- **Retrieval differs between APIs.** The Express backend has a hybrid retrieval pipeline, while the FastAPI backend currently uses full-text and keyword retrieval. Align or clearly document the behavior, then compare both against the same benchmark.
+- **The frontend bundle is large.** A production build reports an approximately **1.07 MB minified JavaScript bundle** and a Vite chunk-size warning. Split heavier routes and dependencies with dynamic imports, and monitor the resulting bundle sizes.
+- **Performance and cost are not benchmarked here.** Add request latency, token usage, and model-cost measurements, then use them alongside quality results to tune chunk size, retrieval depth, and generation limits.
+- **FastAPI document extraction is synchronous.** Consider background processing for larger uploads and expose processing status to the UI if workloads require it.
+
 ## 📚 Project Documentation
 
 - [FastAPI + Supabase + Vercel deployment guide](docs/DEPLOYMENT_FASTAPI_SUPABASE_VERCEL.md)
